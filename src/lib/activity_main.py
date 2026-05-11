@@ -6851,6 +6851,7 @@ class CardWalletActivity(BaseActivity):
         self._toast = None
         self._dump_dir = None
         self._dump_type_key = None
+        self._card_type = None
         self._type_index = 0
         self._file_list = []
         self._is_dump_list_empty = True
@@ -6938,10 +6939,24 @@ class CardWalletActivity(BaseActivity):
             try:
                 entries = os.listdir(self._dump_dir)
                 valid_ext = ('.bin', '.eml', '.txt', '.json', '.pm3')
-                self._file_list = sorted(
+                all_files = sorted(
                     [f for f in entries
                      if os.path.isfile(os.path.join(self._dump_dir, f))
                      and any(f.lower().endswith(ext) for ext in valid_ext)])
+                # For T55xx dumps, show only one entry per dump set.
+                # Iceman saves .bin and .json for each dump — deduplicate
+                # by stem, preferring .bin as the canonical entry.
+                if self._card_type == 't55xx':
+                    seen_stems = set()
+                    deduped = []
+                    for f in all_files:
+                        stem = os.path.splitext(f)[0]
+                        if stem not in seen_stems:
+                            seen_stems.add(stem)
+                            deduped.append(f)
+                    self._file_list = deduped
+                else:
+                    self._file_list = all_files
             except OSError:
                 self._file_list = []
         self._is_dump_list_empty = len(self._file_list) == 0
@@ -7046,12 +7061,26 @@ class CardWalletActivity(BaseActivity):
 
     def _confirmDelete(self):
         if self._selected_file and self._dump_dir:
-            filepath = os.path.join(self._dump_dir, self._selected_file)
-            try:
-                if os.path.isfile(filepath):
-                    os.remove(filepath)
-            except OSError:
-                pass
+            stem = os.path.splitext(self._selected_file)[0]
+            # For T55xx, delete all files sharing the same stem (.bin, .json, .eml etc)
+            # since iceman saves multiple files per dump set.
+            if self._card_type == 't55xx':
+                try:
+                    for f in os.listdir(self._dump_dir):
+                        if os.path.splitext(f)[0] == stem:
+                            try:
+                                os.remove(os.path.join(self._dump_dir, f))
+                            except OSError:
+                                pass
+                except OSError:
+                    pass
+            else:
+                filepath = os.path.join(self._dump_dir, self._selected_file)
+                try:
+                    if os.path.isfile(filepath):
+                        os.remove(filepath)
+                except OSError:
+                    pass
         self._selected_file = None
         # Check if any files remain
         remaining = []
@@ -7090,6 +7119,7 @@ class CardWalletActivity(BaseActivity):
         _name, dir_key = DUMP_TYPE_ORDER[real_idx]
         self._dump_type_key = dir_key
         self._dump_dir = DUMP_DIRS.get(dir_key)
+        self._card_type = dir_key
         self._showFileList()
 
     def _openTagInfo(self):
@@ -8118,7 +8148,19 @@ class ReadFromHistoryActivity(BaseActivity):
                       'gallagher', 'visa2000', 'presco', 'ioprox'):
             data = info.get('data', '')
             cache['data'] = data
-            cache['raw'] = data
+            # Read file content for raw — the .txt stores the actual raw
+            # hex payload written by _save_txt (lfread.py), which the
+            # filename never fully encodes (it only contains the card ID
+            # or FC/CN). Fall back to data on any read failure so existing
+            # behaviour is preserved for all other consumers of this cache.
+            file_raw = ''
+            if self._file_path:
+                try:
+                    with open(self._file_path, 'r') as _f:
+                        file_raw = _f.read().strip()
+                except Exception:
+                    pass
+            cache['raw'] = file_raw if file_raw else data
         elif dtk == 'felica':
             cache['uid'] = info.get('uid', '')
         elif dtk in ('icode', 'hf14a'):
