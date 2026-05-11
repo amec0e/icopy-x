@@ -450,7 +450,7 @@ def write_dump_t55xx(file, key=None):
     # below rejects false-matches by requiring the `NN | 0x<8hex>`
     # framing.
     import re as _re
-    read_blocks = _re.findall(r'^\s*\d+\s*\|\s*0x([A-Fa-f0-9]{8})\s*\|',
+    read_blocks = _re.findall(r'^\s*\d+\s*\|\s*([A-Fa-f0-9]{8})\s*\|',
                               dump_text, _re.MULTILINE)
 
     if not read_blocks:
@@ -672,13 +672,17 @@ def _inline_verify(typ):
     `lf sea` + `lf em 410x_read` after cloning, before returning success.
     This consumes sequential fixture responses in the correct order.
     Result is not checked -- it's a best-effort inline verify.
+
+    save=False is passed to the read function to prevent creating a new
+    dump file during this post-write verify read. The original firmware
+    does not save dumps during inline verify.
     """
     try:
         executor.startPM3Task('lf sea', 10000)
         import lfread as _lfread
         read_fn = _lfread.READ.get(typ)
         if read_fn is not None:
-            read_fn()
+            read_fn(save=False)
     except Exception:
         pass
 
