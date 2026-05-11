@@ -508,11 +508,38 @@ def dumpT55XX(listener, key=None):
         except ImportError:
             return -2
 
-    # Create dump file path (original .so uses appfiles.create_t55xx)
+    # Create dump file path using b0 from detect and b1/b2 from block reads
     dump_path = None
     try:
         import appfiles
-        dump_path = appfiles.create_t55xx('')
+        b0 = DUMP_TEMP.get('b0', '') if isinstance(DUMP_TEMP, dict) else ''
+
+        # Read b1 and b2 for full naming convention T55xx_<b0>_<b1>_<b2>_N
+        _RE_BLOCK = r'^\s*\d+\s+\|\s+([A-Fa-f0-9]{8})\s+\|'
+        b1 = '00000000'
+        b2 = '00000000'
+        try:
+            cmd_b1 = 'lf t55xx read -b 1'
+            if key:
+                cmd_b1 += ' -p %s' % key
+            if executor.startPM3Task(cmd_b1, TIMEOUT) != -1:
+                m = re.search(_RE_BLOCK, executor.getPrintContent() or '', re.MULTILINE)
+                if m:
+                    b1 = m.group(1).upper()
+        except Exception:
+            pass
+        try:
+            cmd_b2 = 'lf t55xx read -b 2'
+            if key:
+                cmd_b2 += ' -p %s' % key
+            if executor.startPM3Task(cmd_b2, TIMEOUT) != -1:
+                m = re.search(_RE_BLOCK, executor.getPrintContent() or '', re.MULTILINE)
+                if m:
+                    b2 = m.group(1).upper()
+        except Exception:
+            pass
+
+        dump_path = appfiles.create_t55xx(b0, b1, b2)
     except Exception:
         import os
         dump_dir = '/mnt/upan/dump/t55xx'
@@ -638,12 +665,19 @@ def chkAndDumpT55xx(listener):
     on chkAndDumpT55xx's return to determine success.
     detectT55XX returns int and caches info in DUMP_TEMP.
     """
-    keys = chkT55xx(listener)
-    key = keys[0] if keys else None
-
-    detect_ret = detectT55XX(key)
+    # Try detect with no key first — only run chkT55xx if that fails.
+    # Running chkT55xx unconditionally against an unprotected tag can
+    # corrupt block 0 via iceman's lf t55xx chk write behaviour, which
+    # sets the password enable bit and bricks the card.
+    key = None
+    detect_ret = detectT55XX(None)
     if detect_ret < 0:
-        return -1
+        # Detect failed — tag may be password protected, try key check
+        keys = chkT55xx(listener)
+        key = keys[0] if keys else None
+        detect_ret = detectT55XX(key)
+        if detect_ret < 0:
+            return -1
 
     # detectT55XX caches parsed info in DUMP_TEMP
     detect = DUMP_TEMP
