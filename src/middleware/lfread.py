@@ -51,7 +51,7 @@ Iceman-native command forms (P3.5 refactor, 2026-04-17):
       - lf visa2000 reader  cmdlfvisa2000.c:306  (matrix L1236)
       - lf nexwatch reader  cmdlfnexwatch.c:585  (matrix L1237)
   - Parsers consume `lfsearch.REGEX_*` (refactored to iceman-native in
-    P3.1; see lfsearch.py header) via the shared `read()` / `readCardIdAndRaw`
+    P3.1; see lfsearch.py module header) via the shared `read()` / `readCardIdAndRaw`
     / `readFCCNAndRaw` helpers.
   - Per-tag FC/CN shape caveats (iceman-native Raw: always present,
     FC/CN sometimes omitted — matrix L1213): Gallagher emits
@@ -67,6 +67,8 @@ Iceman-native command forms (P3.5 refactor, 2026-04-17):
     success status truthy when a raw field is present.  See gap log
     P3.5.
 """
+
+import os
 
 try:
     import executor
@@ -102,12 +104,70 @@ except ImportError:
 
 TIMEOUT = 10000
 
+# ---------------------------------------------------------------------------
+# Dump directory mapping: type ID -> (appfiles dir name, display prefix)
+# ---------------------------------------------------------------------------
+_DUMP_DIRS = {
+    8:  ('em410x',    'EM410x'),
+    9:  ('hid',       'HID-Prox'),
+    10: ('indala',    'Indala'),
+    11: ('awid',      'AWID'),
+    12: ('ioprox',    'IOProx'),
+    13: ('gproxii',   'GProxII'),
+    14: ('securakey', 'Securakey'),
+    15: ('viking',    'Viking'),
+    16: ('pyramid',   'Pyramid'),
+    28: ('fdx',       'FDX'),
+    29: ('gallagher', 'Gallagher'),
+    30: ('jablotron', 'Jablotron'),
+    31: ('keri',      'KERI'),
+    32: ('nedap',     'NEDAP'),
+    33: ('noralsy',   'Noralsy'),
+    34: ('pac',       'PAC'),
+    35: ('paradox',   'Paradox'),
+    36: ('presco',    'Presco'),
+    37: ('visa2000',  'Visa2000'),
+    45: ('nexwatch',  'NexWatch'),
+}
+
 
 def createRetObj(uid, raw, ret):
     return {'return': ret, 'data': uid, 'raw': raw}
 
 
-def read(cmd, uid_regex, raw_regex, uid_index=0, raw_index=0):
+def _save_txt(typ, uid, raw):
+    """Save LF read result as .txt in the correct dump directory.
+
+    Naming convention (verified from real device):
+      Raw ID types:   <Type>-ID-<hexid>_N.txt   e.g. PAC-ID-8HEXID_1.txt
+      FC/CN types:    <Type>-ID_FC,CN=<fc>,<cn>_N.txt  e.g. KERI-ID_FC,CN=002,171223_1.txt
+    """
+    try:
+        import appfiles
+        dir_name, prefix = _DUMP_DIRS.get(typ, ('lf', 'LF'))
+        dump_dir = os.path.join(appfiles.PATH_DUMP, dir_name, '')
+        os.makedirs(dump_dir, exist_ok=True)
+
+        # Build the filename stem based on what data we have
+        # All types use underscore separator: <Type>-ID_<data>
+        # e.g. PAC-ID_AABA517B, KERI-ID_FC,CN=002,171223, HID-Prox-ID_200499aadc
+        if uid:
+            stem = '%s-ID_%s' % (prefix, uid.replace(' ', ''))
+        elif raw:
+            stem = '%s-ID_%s' % (prefix, raw.replace(' ', ''))
+        else:
+            return
+
+        n = 1
+        while os.path.exists(os.path.join(dump_dir, '%s_%d.txt' % (stem, n))):
+            n += 1
+        with open(os.path.join(dump_dir, '%s_%d.txt' % (stem, n)), 'w') as f:
+            f.write((raw or uid or '') + '\n')
+    except Exception:
+        pass
+
+
+def read(cmd, uid_regex, raw_regex, uid_index=0, raw_index=0, typ=None, save=True):
     """Generic LF per-tag reader driver.
 
     Sends `cmd` (an iceman-native `lf <tag> reader` string; see module
@@ -132,6 +192,11 @@ def read(cmd, uid_regex, raw_regex, uid_index=0, raw_index=0):
                     `raw: %08x%08x%08x` (cmdlfhid.c:235).
       REGEX_ANIMAL  r'Animal ID\\.+\\s+([0-9\\-]+)' matches iceman
                     `Animal ID........... %03u-%012llu` (cmdlffdxb.c:572/578).
+
+    Args:
+        save: If True (default), save a .txt dump on successful read.
+              Pass False for inline verify reads (post-write) to avoid
+              creating spurious dump files.
     """
     ret = executor.startPM3Task(cmd, TIMEOUT)
     if ret == -1:
@@ -148,22 +213,28 @@ def read(cmd, uid_regex, raw_regex, uid_index=0, raw_index=0):
     if raw:
         raw = lfsearch.cleanHexStr(raw.strip())
     if uid or raw:
+        if save and typ is not None:
+            _save_txt(typ, uid, raw)
         return createRetObj(uid, raw, 1)
     return createRetObj(None, None, -1)
 
 
-def readCardIdAndRaw(cmd, uid_index=0, raw_index=0):
+def readCardIdAndRaw(cmd, uid_index=0, raw_index=0, typ=None, save=True):
     """Iceman-native per-tag: parse `Card|ID|UID` + `Raw:` from cache.
 
     Used by: Viking, ProxIO, Jablotron, Nedap, Noralsy, PAC, Presco,
     Visa2000, NexWatch.  Shape spec: lfsearch.REGEX_CARD_ID /
     REGEX_RAW (iceman-native, see lfsearch.py module header).
+
+    Args:
+        save: If True (default), save a .txt dump on successful read.
+              Pass False for inline verify reads to avoid spurious dumps.
     """
     return read(cmd, lfsearch.REGEX_CARD_ID, lfsearch.REGEX_RAW,
-                uid_index=uid_index, raw_index=raw_index)
+                uid_index=uid_index, raw_index=raw_index, typ=typ, save=save)
 
 
-def readFCCNAndRaw(cmd, uid_index=0, raw_index=0):
+def readFCCNAndRaw(cmd, uid_index=0, raw_index=0, typ=None, save=True):
     """Iceman-native per-tag: parse `FC: %d Card: %u` + `Raw:` from cache.
 
     Used by: AWID (cmdlfawid.c:248), GProx-II (cmdlfguard.c:186),
@@ -210,50 +281,52 @@ def readFCCNAndRaw(cmd, uid_index=0, raw_index=0):
         # but Raw present), preserving caller-expected 'FC,CN: xxx,yyy'
         # shape.
         uid = lfsearch.getFCCN()
+        if save and typ is not None:
+            _save_txt(typ, uid, raw)
         return createRetObj(uid, raw, 1)
     return createRetObj(None, None, -1)
 
 
-def readEM410X(listener=None, infos=None):
+def readEM410X(listener=None, infos=None, save=True):
     return read('lf em 410x reader', lfsearch.REGEX_EM410X, lfsearch.REGEX_RAW,
-                uid_index=1, raw_index=0)
+                uid_index=1, raw_index=0, typ=8, save=save)
 
 
-def readHID(listener=None, infos=None):
+def readHID(listener=None, infos=None, save=True):
     return read('lf hid reader', lfsearch.REGEX_HID, lfsearch.REGEX_RAW,
-                uid_index=1, raw_index=0)
+                uid_index=1, raw_index=0, typ=9, save=save)
 
 
-def readIndala(listener=None, infos=None):
+def readIndala(listener=None, infos=None, save=True):
     return read('lf indala reader', lfsearch.REGEX_RAW, lfsearch.REGEX_RAW,
-                uid_index=1, raw_index=1)
+                uid_index=1, raw_index=1, typ=10, save=save)
 
 
-def readAWID(listener=None, infos=None):
-    return readFCCNAndRaw('lf awid reader')
+def readAWID(listener=None, infos=None, save=True):
+    return readFCCNAndRaw('lf awid reader', typ=11, save=save)
 
 
-def readProxIO(listener=None, infos=None):
-    return readCardIdAndRaw('lf io reader')
+def readProxIO(listener=None, infos=None, save=True):
+    return readCardIdAndRaw('lf io reader', typ=12, save=save)
 
 
-def readGProx2(listener=None, infos=None):
-    return readFCCNAndRaw('lf gproxii reader')
+def readGProx2(listener=None, infos=None, save=True):
+    return readFCCNAndRaw('lf gproxii reader', typ=13, save=save)
 
 
-def readSecurakey(listener=None, infos=None):
-    return readFCCNAndRaw('lf securakey reader')
+def readSecurakey(listener=None, infos=None, save=True):
+    return readFCCNAndRaw('lf securakey reader', typ=14, save=save)
 
 
-def readViking(listener=None, infos=None):
-    return readCardIdAndRaw('lf viking reader')
+def readViking(listener=None, infos=None, save=True):
+    return readCardIdAndRaw('lf viking reader', typ=15, save=save)
 
 
-def readPyramid(listener=None, infos=None):
-    return readFCCNAndRaw('lf pyramid reader')
+def readPyramid(listener=None, infos=None, save=True):
+    return readFCCNAndRaw('lf pyramid reader', typ=16, save=save)
 
 
-def readT55XX(listener=None, infos=None):
+def readT55XX(listener=None, infos=None, save=True):
     """Read T55XX — detect + chk + dump, return dict for read.so success path."""
     if lft55xx is None:
         return createRetObj(None, None, -1)
@@ -263,56 +336,56 @@ def readT55XX(listener=None, infos=None):
     return createRetObj(None, None, -1)
 
 
-def readEM4X05(listener=None, infos=None):
+def readEM4X05(listener=None, infos=None, save=True):
     """Read EM4X05 — info + dump, return dict for read.so success path."""
     if lfem4x05 is None:
         return createRetObj(None, None, -1)
     return lfem4x05.infoAndDumpEM4x05ByKey()
 
 
-def readFDX(listener=None, infos=None):
+def readFDX(listener=None, infos=None, save=True):
     return read('lf fdxb reader', lfsearch.REGEX_ANIMAL, lfsearch.REGEX_RAW,
-                uid_index=1, raw_index=0)
+                uid_index=1, raw_index=0, typ=28, save=save)
 
 
-def readGALLAGHER(listener=None, infos=None):
-    return readFCCNAndRaw('lf gallagher reader')
+def readGALLAGHER(listener=None, infos=None, save=True):
+    return readFCCNAndRaw('lf gallagher reader', typ=29, save=save)
 
 
-def readJablotron(listener=None, infos=None):
-    return readCardIdAndRaw('lf jablotron reader')
+def readJablotron(listener=None, infos=None, save=True):
+    return readCardIdAndRaw('lf jablotron reader', typ=30, save=save)
 
 
-def readKeri(listener=None, infos=None):
-    return readFCCNAndRaw('lf keri reader')
+def readKeri(listener=None, infos=None, save=True):
+    return readFCCNAndRaw('lf keri reader', typ=31, save=save)
 
 
-def readNedap(listener=None, infos=None):
-    return readCardIdAndRaw('lf nedap reader')
+def readNedap(listener=None, infos=None, save=True):
+    return readCardIdAndRaw('lf nedap reader', typ=32, save=save)
 
 
-def readNoralsy(listener=None, infos=None):
-    return readCardIdAndRaw('lf noralsy reader')
+def readNoralsy(listener=None, infos=None, save=True):
+    return readCardIdAndRaw('lf noralsy reader', typ=33, save=save)
 
 
-def readPAC(listener=None, infos=None):
-    return readCardIdAndRaw('lf pac reader')
+def readPAC(listener=None, infos=None, save=True):
+    return readCardIdAndRaw('lf pac reader', typ=34, save=save)
 
 
-def readParadox(listener=None, infos=None):
-    return readFCCNAndRaw('lf paradox reader')
+def readParadox(listener=None, infos=None, save=True):
+    return readFCCNAndRaw('lf paradox reader', typ=35, save=save)
 
 
-def readPresco(listener=None, infos=None):
-    return readCardIdAndRaw('lf presco reader')
+def readPresco(listener=None, infos=None, save=True):
+    return readCardIdAndRaw('lf presco reader', typ=36, save=save)
 
 
-def readVisa2000(listener=None, infos=None):
-    return readCardIdAndRaw('lf visa2000 reader')
+def readVisa2000(listener=None, infos=None, save=True):
+    return readCardIdAndRaw('lf visa2000 reader', typ=37, save=save)
 
 
-def readNexWatch(listener=None, infos=None):
-    return readCardIdAndRaw('lf nexwatch reader')
+def readNexWatch(listener=None, infos=None, save=True):
+    return readCardIdAndRaw('lf nexwatch reader', typ=45, save=save)
 
 
 READ = {
