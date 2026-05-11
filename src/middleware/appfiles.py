@@ -329,7 +329,7 @@ def create_iclass(typ, csn):
 
     Original .so creates directory and returns next available path:
     /mnt/upan/dump/iclass/Iclass-{typ}_{csn}_{n}
-    Ground truth: trace_iclass_elite_read_20260401.txt line 7 —
+    Ground truth: trace_iclass_elite_read_20260401.txt line 7 â
     'hf iclass dump k ... f /mnt/upan/dump/iclass/Iclass-Elite_4A678E15FEFF12E0_1 e'
     """
     mkdirs_on_icopy(PATH_DUMP_ICLASS)
@@ -338,9 +338,17 @@ def create_iclass(typ, csn):
     return _next_filename(PATH_DUMP_ICLASS, prefix, uid, ext='').rstrip('.')
 
 
-def create_t55xx(uid, file):
-    """Create T55XX dump path."""
+def create_t55xx(b0, b1='00000000', b2='00000000'):
+    """Create T55XX dump path using block values in the filename.
+
+    Returns next available path: /mnt/upan/dump/t55xx/T55xx_<b0>_<b1>_<b2>_N
+    """
     mkdirs_on_icopy(PATH_DUMP_T55XX)
+    b0 = b0.upper() if b0 else '00000000'
+    b1 = b1.upper() if b1 else '00000000'
+    b2 = b2.upper() if b2 else '00000000'
+    uid = '%s_%s_%s' % (b0, b1, b2)
+    return _next_filename(PATH_DUMP_T55XX, 'T55xx', uid, ext='').rstrip('.')
 
 
 def create_em410x(uid, file):
