@@ -314,7 +314,15 @@ def verify(listener, infos, bundle, run_on_subthread=True):
                         raw = r
                         break
 
-                ret = lfverify.verify(typ, data, raw)
+                if typ == 23:
+                    file_path = ''
+                    if isinstance(bundle, str):
+                        file_path = bundle
+                    elif isinstance(bundle, dict):
+                        file_path = bundle.get('file', '')
+                    ret = lfverify.verify(typ, data, file_path)
+                else:
+                    ret = lfverify.verify(typ, data, raw)
                 call_on_finish(1 if ret == 0 else -1, listener)
             elif typ in _ICLASS_TYPES:
                 import iclasswrite
