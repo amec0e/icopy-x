@@ -44,6 +44,7 @@ from lib._constants import (
     KEY_M1,
     KEY_M2,
     KEY_PWR,
+    KEY_ALL,
 )
 
 logger = logging.getLogger(__name__)
@@ -230,6 +231,11 @@ class MainActivity(BaseActivity):
         elif key == KEY_M1:
             # M1 is empty on main menu -- no action
             pass
+
+        elif key == KEY_ALL:
+            # S/R/W button — launch AutoCopy (Scan -> Read -> Write)
+            from lib.activity_main import AutoCopyActivity
+            actstack.start_activity(AutoCopyActivity)
 
         elif key == KEY_PWR:
             # PWR triggers shutdown/sleep flow
