@@ -5950,6 +5950,7 @@ SIM_MAP = [
     ('Viking ID',     15, 'LF', 'single_4b', 'uid',     'lf viking sim --cn {}'),
     ('Pyramid ID',    16, 'LF', 'lf_pyramid','pyramid', 'lf pyramid sim --fc {} --cn {}'),
     ('Jablotron ID',  30, 'LF', 'lf_jab',    'jabdat',  'lf jablotron sim --cn {}'),
+    ('KERI ID',       31, 'LF', 'lf_keri',   'data',    'lf keri sim --id {}'),
     # NOTE: PAC sim on PAC Door reader works and to flipper zero works but cannot get RDV4 to detect,
     # iCopy > Flipper Zero Works and iCopy > PAC Door Reader but iCopy > RDV4 could not get to work.
     # iCopy > PAC door reader can be finky but tested and working.
@@ -5987,6 +5988,10 @@ SIM_FIELDS = {
     'lf_pyramid':[('FC:',  '255',  'dec', 255),           # 3 digits, original toast: "FC greater than 255"
                   ('CN:',  '65536','dec', 99999)],         # 5 digits max 99999
     'lf_jab':    [('ID:',  '1C6AEB0D2F', 'hex', 10)],
+    # KERI Internal ID: cmdlfkeri.c:176 emits `Internal ID: %u` (decimal).
+    # lf keri sim --id accepts decimal internal ID directly.
+    # Max usable value: 0x7FFFFFFF = 2147483647 (MSB reserved by firmware).
+    'lf_keri':   [('ID:',  '112233', 'dec', 2147483647)],
     # PAC/Stanley card ID: cmdlfpac.c:171 emits `Card: <hex>` (8 hex chars = 4 bytes).
     # lf pac sim --id accepts the card ID hex directly (same shape as card ID from reader).
     'lf_pac':    [('ID:',  'AABA517B', 'hex', 8)],
