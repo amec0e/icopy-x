@@ -357,7 +357,35 @@ def readJablotron(listener=None, infos=None, save=True):
 
 
 def readKeri(listener=None, infos=None, save=True):
-    return readFCCNAndRaw('lf keri reader', typ=31, save=save)
+    """Read a KERI tag and save the dump.
+
+    cmdlfkeri.c:176 emits:
+        "KERI - Internal ID: %u, Raw: %08X%08X"
+    Internal ID is decimal; Raw is 16 hex chars.
+
+    readFCCNAndRaw cannot be used here because KERI does not emit FC:/CN:
+    labels — it emits "Internal ID:" which matches neither _RE_FC nor _RE_CN.
+    The result was a sentinel filename KERI-ID_FC,CN=X,X_N.txt.
+
+    This dedicated function captures Internal ID via REGEX_KERI_ID (decimal)
+    as uid, and Raw via REGEX_RAW as raw, producing correct filenames like
+    KERI-ID_2164260_N.txt with raw hex as file content.
+    """
+    ret = executor.startPM3Task('lf keri reader', TIMEOUT)
+    if ret == -1:
+        return createRetObj(None, None, -1)
+    content = executor.getPrintContent()
+    if not content or executor.isEmptyContent():
+        return createRetObj(None, None, -1)
+    uid = executor.getContentFromRegexG(lfsearch.REGEX_KERI_ID, 1)
+    raw = executor.getContentFromRegexG(lfsearch.REGEX_RAW, 1)
+    if raw:
+        raw = lfsearch.cleanHexStr(raw.strip())
+    if uid or raw:
+        if save:
+            _save_txt(31, uid, raw)
+        return createRetObj(uid, raw, 1)
+    return createRetObj(None, None, -1)
 
 
 def readNedap(listener=None, infos=None, save=True):
