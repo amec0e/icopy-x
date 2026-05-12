@@ -5986,7 +5986,7 @@ SIM_FIELDS = {
                   ('CN:',  '65535','dec', 65535)],         # 5 digits, 0xFFFF chipset max
     'lf_pyramid':[('FC:',  '255',  'dec', 255),           # 3 digits, original toast: "FC greater than 255"
                   ('CN:',  '65536','dec', 99999)],         # 5 digits max 99999
-    'lf_jab':    [('ID:',  '1C6AEB', 'hex', 6)],
+    'lf_jab':    [('ID:',  '1C6AEB0D2F', 'hex', 10)],
     # PAC/Stanley card ID: cmdlfpac.c:171 emits `Card: <hex>` (8 hex chars = 4 bytes).
     # lf pac sim --id accepts the card ID hex directly (same shape as card ID from reader).
     'lf_pac':    [('ID:',  'AABA517B', 'hex', 8)],
