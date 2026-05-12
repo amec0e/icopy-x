@@ -5950,9 +5950,9 @@ SIM_MAP = [
     ('Viking ID',     15, 'LF', 'single_4b', 'uid',     'lf viking sim --cn {}'),
     ('Pyramid ID',    16, 'LF', 'lf_pyramid','pyramid', 'lf pyramid sim --fc {} --cn {}'),
     ('Jablotron ID',  30, 'LF', 'lf_jab',    'jabdat',  'lf jablotron sim --cn {}'),
-    # NOTE: PAC sim on PAC reader does not respond and RDV4 always detects as Indala with garbage,
-    # iCopy > Flipper Zero Works but iCopy > RDV4 and iCopy > PAC Door reader does not work.
-    # Likely not producing clean enough signal from the hardware.
+    # NOTE: PAC sim on PAC Door reader works and to flipper zero works but cannot get RDV4 to detect,
+    # iCopy > Flipper Zero Works and iCopy > PAC Door Reader but iCopy > RDV4 could not get to work.
+    # iCopy > PAC door reader can be finky but tested and working.
     ('PAC/Stanley ID',34, 'LF', 'lf_pac',    'data',    'lf pac sim --cn {}'),
     ('Nedap ID',      32, 'LF', 'lf_nedap',  'nedap',   'lf nedap sim --st {} --cc {} --id {}'),
     ('FDX-B Animal',  28, 'LF', 'lf_fdx_a',  'fdx',     'lf fdxb sim --country {} --national {} --animal'),
