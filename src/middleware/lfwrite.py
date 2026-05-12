@@ -138,7 +138,6 @@ B0_WRITE_MAP = {
     11: '00107060',   # AWID
     16: '00107080',   # PYRAMID
     12: '00147040',   # IO_PROX
-    31: '603E1040',   # KERI
     30: '00158040',   # JABLOTRON
     13: '00150060',   # GPROX_II
     32: '907F0042',   # NEDAP
@@ -258,6 +257,24 @@ def write_fdx_par(animal_id):
     return 1
 
 
+def write_keri(internal_id):
+    """Clone KERI tag to T5577 using internal ID.
+
+    Iceman-native: sends `lf keri clone -t i --cn <dec>`.
+    CLI spec: cmdlfkeri.c CmdKeriClone, arg_int1(NULL, "cn", "<dec>",
+    "KERI card ID"). Type 'i' = Internal ID mode.
+    Internal ID is the decimal value captured by REGEX_KERI_ID from
+    readKeri (demodKeri emits "KERI - Internal ID: %u").
+
+    Returns 1 on success, -1 on error.
+    """
+    cmd = 'lf keri clone -t i --cn {}'.format(internal_id)
+    ret = executor.startPM3Task(cmd, TIMEOUT)
+    if ret == -1:
+        return -1
+    return 1
+
+
 def write_nedap(raw):
     """Clone NEDAP tag.
 
@@ -272,6 +289,7 @@ PAR_CLONE_MAP = {
     9:  write_hid,
     10: write_indala,
     28: write_fdx_par,
+    31: write_keri,
     32: write_nedap,
 }
 
