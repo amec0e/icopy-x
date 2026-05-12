@@ -82,6 +82,12 @@ COUNT = 0
 # Matrix L980; source_strings.md "lf fdxb" sections.
 REGEX_ANIMAL = r'Animal ID\.+\s+([0-9\-]+)'
 
+# Iceman KERI demodKeri @ cmdlfkeri.c:176 emits:
+#   "KERI - Internal ID: %u, Raw: %08X%08X"
+# Internal ID is decimal (%u). Not captured by REGEX_CARD_ID (which matches
+# Card/ID/UID prefixes) because "Internal ID:" has a qualifying prefix.
+REGEX_KERI_ID = r'Internal ID:\s+(\d+)'
+
 # Iceman per-tag demod labels: Viking "Card <hex>" (cmdlfviking.c:57, no colon),
 # Jablotron/Noralsy/Paradox "Card: <u>" or "ID: <hex>" (cmdlfjablotron.c:98,
 # cmdlfparadox.c:224). Tolerant to both `Card `/`Card:` within iceman native forms.
