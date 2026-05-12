@@ -8168,6 +8168,14 @@ class ReadFromHistoryActivity(BaseActivity):
                 except Exception:
                     pass
             cache['raw'] = file_raw if file_raw else data
+            # FDX-B animal dump txt contains CCC-NNNNNNNNNNNN directly.
+            # Split into country + nc so sim field prepopulation works,
+            # mirroring what lfsearch.py does for a live scan (Check 12).
+            if dtk == 'fdx' and file_raw and '-' in file_raw:
+                parts = file_raw.split('-', 1)
+                if len(parts) == 2:
+                    cache['country'] = parts[0]
+                    cache['nc'] = parts[1]
         elif dtk == 'felica':
             cache['uid'] = info.get('uid', '')
         elif dtk in ('icode', 'hf14a'):
