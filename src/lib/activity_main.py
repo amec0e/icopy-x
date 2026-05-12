@@ -5950,6 +5950,10 @@ SIM_MAP = [
     ('Viking ID',     15, 'LF', 'single_4b', 'uid',     'lf viking sim --cn {}'),
     ('Pyramid ID',    16, 'LF', 'lf_pyramid','pyramid', 'lf pyramid sim --fc {} --cn {}'),
     ('Jablotron ID',  30, 'LF', 'lf_jab',    'jabdat',  'lf jablotron sim --cn {}'),
+    # NOTE: PAC sim on PAC reader does not respond and RDV4 always detects as Indala with garbage,
+    # iCopy > Flipper Zero Works but iCopy > RDV4 and iCopy > PAC Door reader does not work.
+    # Likely not producing clean enough signal from the hardware.
+    ('PAC/Stanley ID',34, 'LF', 'lf_pac',    'data',    'lf pac sim --cn {}'),
     ('Nedap ID',      32, 'LF', 'lf_nedap',  'nedap',   'lf nedap sim --st {} --cc {} --id {}'),
     ('FDX-B Animal',  28, 'LF', 'lf_fdx_a',  'fdx',     'lf fdxb sim --country {} --national {} --animal'),
     ('FDX-B Data',    28, 'LF', 'lf_fdx_d',  'fdx',     'lf fdxb sim --country {} --national {} --extended {}'),
@@ -5983,6 +5987,9 @@ SIM_FIELDS = {
     'lf_pyramid':[('FC:',  '255',  'dec', 255),           # 3 digits, original toast: "FC greater than 255"
                   ('CN:',  '65536','dec', 99999)],         # 5 digits max 99999
     'lf_jab':    [('ID:',  '1C6AEB', 'hex', 6)],
+    # PAC/Stanley card ID: cmdlfpac.c:171 emits `Card: <hex>` (8 hex chars = 4 bytes).
+    # lf pac sim --id accepts the card ID hex directly (same shape as card ID from reader).
+    'lf_pac':    [('ID:',  'AABA517B', 'hex', 8)],
     'lf_nedap':  [('Subtype:', '15', 'dec', 15),          # FB proof: max 15, decimal display
                   ('CN:',  '999',   'dec', 999),          # 3 digits max 999 (doc: 65535)
                   ('ID:',  '99999', 'dec', 65535)],        # 5 digits, doc max 65535
