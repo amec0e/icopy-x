@@ -51,7 +51,7 @@ Iceman-native command forms (P3.5 refactor, 2026-04-17):
       - lf visa2000 reader  cmdlfvisa2000.c:306  (matrix L1236)
       - lf nexwatch reader  cmdlfnexwatch.c:585  (matrix L1237)
   - Parsers consume `lfsearch.REGEX_*` (refactored to iceman-native in
-    P3.1; see lfsearch.py module header) via the shared `read()` / `readCardIdAndRaw`
+    P3.1; see lfsearch.py header) via the shared `read()` / `readCardIdAndRaw`
     / `readFCCNAndRaw` helpers.
   - Per-tag FC/CN shape caveats (iceman-native Raw: always present,
     FC/CN sometimes omitted — matrix L1213): Gallagher emits
