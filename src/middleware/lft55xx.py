@@ -509,6 +509,7 @@ def dumpT55XX(listener, key=None):
             return -2
 
     # Create dump file path using b0 from detect and b1/b2 from block reads
+    # (original .so uses appfiles.create_t55xx)
     dump_path = None
     try:
         import appfiles
