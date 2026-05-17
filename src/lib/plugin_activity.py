@@ -56,6 +56,8 @@ from lib._constants import (
     KEY_UP,
     KEY_DOWN,
     KEY_OK,
+    KEY_LEFT,
+    KEY_RIGHT,
     KEY_M1,
     KEY_M2,
     CONTENT_Y0,
@@ -64,6 +66,7 @@ from lib._constants import (
     BG_COLOR,
 )
 from lib.json_renderer import JsonRenderer
+from lib import resources
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +112,7 @@ class PluginActivity(BaseActivity):
         self._permissions = []
         self._entry_class = None
         self._bg_lock = threading.Lock()
+        self._input_widget = None  # InputMethods widget for input_hex content type
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -225,6 +229,22 @@ class PluginActivity(BaseActivity):
         # Busy state — swallow all keys
         if self.isbusy():
             return
+
+        # Forward navigation keys to input widget if active
+        if self._input_widget is not None:
+            if key == KEY_UP:
+                self._input_widget.rollUp()
+                return
+            elif key == KEY_DOWN:
+                self._input_widget.rollDown()
+                return
+            elif key == KEY_LEFT:
+                self._input_widget.prevChar()
+                return
+            elif key == KEY_RIGHT:
+                self._input_widget.nextChar()
+                return
+            # KEY_OK and KEY_M2 fall through to keys_map to trigger action
 
         # Look up key action in current screen definition
         state_def = self._screens.get(self._current_state_id)
@@ -389,6 +409,11 @@ class PluginActivity(BaseActivity):
         canvas.delete('_jr_content_bg')
         canvas.delete('_jr_buttons')
 
+        # Hide and destroy any existing input widget on state change
+        if self._input_widget is not None:
+            self._input_widget.hide()
+            self._input_widget = None
+
         # Inject list state (selected index, scroll offset) into content
         screen = self._inject_list_state(screen)
 
@@ -401,8 +426,27 @@ class PluginActivity(BaseActivity):
                 resolved_title = '%s %s' % (resolved_title, self._renderer.resolve(page))
             self.setTitle(resolved_title)
 
-        # Render content and buttons
-        self._renderer.render(screen)
+        # Render content — input_hex uses InputMethods widget, all others
+        # go through JsonRenderer (existing behaviour untouched)
+        content = screen.get('content', {})
+        if content.get('type') == 'input_hex':
+            label = content.get('label', '')
+            length = content.get('length', 8)
+            placeholder = content.get('placeholder', '0' * length)
+            if label:
+                canvas.create_text(
+                    SCREEN_W // 2, CONTENT_Y0 + 20,
+                    text=label, fill='#000000',
+                    font=resources.get_font(13),
+                    anchor='center', tags='_jr_content',
+                )
+            from lib.widget import InputMethods
+            self._input_widget = InputMethods(
+                canvas, format='hex', length=length, placeholder=placeholder,
+            )
+            self._input_widget.show()
+        else:
+            self._renderer.render(screen)
 
         # Handle buttons for M1/M2 active state
         buttons = screen.get('buttons', {})
@@ -782,6 +826,16 @@ class PluginActivity(BaseActivity):
             The variable value, or default.
         """
         return self._state.get(key, default)
+
+    def get_input(self):
+        """Get the current value from the active input_hex widget.
+
+        Returns:
+            str: Current hex value, or '' if no input widget is active.
+        """
+        if self._input_widget is not None:
+            return self._input_widget.getValue()
+        return ''
 
     def show_toast(self, text, timeout=3000, icon=None):
         """Show a toast message.
