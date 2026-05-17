@@ -7042,8 +7042,21 @@ class CardWalletActivity(BaseActivity):
         if m:
             return '%s(%s)' % (m.group(1), m.group(2))
 
-        # ID-based (EM410x, HID, etc): {Type}-ID_{data}_{index} or {Type}_{data}_{index}
-        # Also handles 4-field: {Type}_{F1}_{F2}_{F3}_{index}
+        # LF ID-based: {Type}-ID_{data}_{index}
+        # Anchors on '-ID_' to handle any prefix depth correctly
+        # (e.g. HID-Prox-ID_, GProxII-ID_, KERI-ID_).
+        # FC/CN filenames strip the FC-CN_ label to show just the
+        # values (e.g. 172-26272(1)), consistent with raw hex types
+        # that show only their card data (e.g. AABA517B(1)).
+        m = re.match(r'.+-ID_(.+)_(\d+)$', base)
+        if m:
+            data = m.group(1)
+            fc_m = re.match(r'^FC-CN_(.+)$', data)
+            if fc_m:
+                data = fc_m.group(1)
+            return '%s(%s)' % (data, m.group(2))
+
+        # Fallback catch-all
         m = re.match(r'\S+?[-_](\S+?)_(\d+)$', base)
         if m:
             return '%s(%s)' % (m.group(1), m.group(2))
@@ -8091,27 +8104,27 @@ class ReadFromHistoryActivity(BaseActivity):
                 info['display'] = '%s-%s(%s)' % (
                     m.group(1), m.group(2).upper(), m.group(3))
         else:
-            # ID-based: {Type}_{Data}_{index}.{ext} (2-field)
-            # or {Type}_{F1}_{F2}_{F3}_{index}.{ext} (4-field)
-            m = re.match(r'(\S+)_(\S+)_(\S+)_(\S+)_(\d+).*\.(.*)', fname)
+            # LF ID-based: {Type}-ID_{data}_{index}.{ext}
+            # Anchors on '-ID_' to handle any prefix depth correctly.
+            # FC/CN data is stored sanitized in the filename
+            # (FC-CN_fc-cn) and must be restored to FC,CN:fc,cn
+            # so template.__drawID renders it correctly via
+            # its startswith('FC,CN:') check.
+            m = re.match(r'.+-ID_(.+)_(\d+)\.(.*)', fname)
             if m:
-                info['type_prefix'] = m.group(1)
-                info['data'] = m.group(2)
-                info['f2'] = m.group(3)
-                info['f3'] = m.group(4)
-                info['index'] = m.group(5)
-                info['ext'] = m.group(6)
-                info['display'] = '%s-%s(%s)' % (
-                    m.group(1), m.group(2), m.group(5))
-            else:
-                m = re.match(r'(\S+)_(\S+)_(\d+).*\.(.*)', fname)
-                if m:
-                    info['type_prefix'] = m.group(1)
-                    info['data'] = m.group(2)
-                    info['index'] = m.group(3)
-                    info['ext'] = m.group(4)
-                    info['display'] = '%s-%s(%s)' % (
-                        m.group(1), m.group(2), m.group(3))
+                raw_data = m.group(1)
+                # Restore FC-CN_<fc>-<cn> -> FC,CN: <fc>,<cn>
+                # Space after colon matches getFCCN() output exactly so
+                # template.__drawID startswith('FC,CN:') check passes
+                # and verify comparison against read-back data succeeds.
+                if re.match(r'^FC-CN_', raw_data):
+                    restored = raw_data.replace('_', ': ', 1).replace('-', ',')
+                else:
+                    restored = raw_data
+                info['data'] = restored
+                info['index'] = m.group(2)
+                info['ext'] = m.group(3)
+                info['display'] = '%s(%s)' % (raw_data, m.group(2))
         return info
 
     def _buildScanCache(self):
