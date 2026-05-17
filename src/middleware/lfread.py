@@ -138,9 +138,16 @@ def createRetObj(uid, raw, ret):
 def _save_txt(typ, uid, raw):
     """Save LF read result as .txt in the correct dump directory.
 
-    Naming convention (verified from real device):
-      Raw ID types:   <Type>-ID-<hexid>_N.txt   e.g. PAC-ID-8HEXID_1.txt
-      FC/CN types:    <Type>-ID_FC,CN=<fc>,<cn>_N.txt  e.g. KERI-ID_FC,CN=002,171223_1.txt
+    Naming convention:
+      Raw ID types:   <Type>-ID_<hexid>_N.txt
+                      e.g. HID-Prox-ID_200499aadc_1.txt
+      FC/CN types:    <Type>-ID_FC-CN_<fc>-<cn>_N.txt
+                      e.g. KERI-ID_FC-CN_002-171223_1.txt
+
+    Special characters from getFCCN() output (colons, commas) are
+    sanitized for filesystem safety: ':' -> '_', ',' -> '-'.
+    The file content always holds the original unmodified raw hex
+    payload — parsers must read the file content, not the filename.
     """
     try:
         import appfiles
@@ -148,15 +155,15 @@ def _save_txt(typ, uid, raw):
         dump_dir = os.path.join(appfiles.PATH_DUMP, dir_name, '')
         os.makedirs(dump_dir, exist_ok=True)
 
-        # Build the filename stem based on what data we have
-        # All types use underscore separator: <Type>-ID_<data>
-        # e.g. PAC-ID_AABA517B, KERI-ID_FC,CN=002,171223, HID-Prox-ID_200499aadc
-        if uid:
-            stem = '%s-ID_%s' % (prefix, uid.replace(' ', ''))
-        elif raw:
-            stem = '%s-ID_%s' % (prefix, raw.replace(' ', ''))
-        else:
+        data = uid or raw
+        if not data:
             return
+        # Sanitize special characters before embedding in the filename.
+        # getFCCN() returns 'FC,CN: x,y' — after stripping spaces this
+        # becomes 'FC,CN:x,y' which contains ':' and ',' that are unsafe
+        # in filenames and break regex parsing. Sanitize to safe chars.
+        safe = data.replace(' ', '').replace(':', '_').replace(',', '-')
+        stem = '%s-ID_%s' % (prefix, safe)
 
         n = 1
         while os.path.exists(os.path.join(dump_dir, '%s_%d.txt' % (stem, n))):
