@@ -239,6 +239,102 @@ def get_max_num(directory, prefix):
     return max_n
 
 
+# ---------------------------------------------------------------------------
+# Dump renaming (Dump Files > Tag Info > DOWN)
+# ---------------------------------------------------------------------------
+RENAME_OK = 1
+RENAME_INVALID = -1
+RENAME_EXISTS = -2
+RENAME_FAILED = -3
+
+# Characters never allowed in a dump name (path separators / FAT reserved)
+_RENAME_INVALID_CHARS = '/\\:*?"<>|'
+
+
+def is_valid_dump_name(name):
+    """True if *name* can be used as a dump filename (without extension)."""
+    if not name or name in ('.', '..') or name != name.strip():
+        return False
+    if name.startswith('.'):
+        return False
+    for ch in name:
+        if ch in _RENAME_INVALID_CHARS or ord(ch) < 0x20:
+            return False
+    return True
+
+
+def dump_set_files(path, whole_set=True):
+    """Files that belong with dump *path*.
+
+    With *whole_set*, every file in the same folder sharing the name before
+    the extension (e.g. .bin + .json + .eml written by iceman for one dump);
+    otherwise just *path*.
+    """
+    if not whole_set:
+        return [path]
+    directory = os.path.dirname(path)
+    stem = os.path.splitext(os.path.basename(path))[0]
+    try:
+        return [os.path.join(directory, f) for f in sorted(os.listdir(directory))
+                if os.path.splitext(f)[0] == stem
+                and os.path.isfile(os.path.join(directory, f))]
+    except OSError:
+        return [path]
+
+
+def rename_dump_set(path, new_stem, whole_set=True):
+    """Rename dump *path* (and its set, see dump_set_files) to *new_stem*.
+
+    Extensions are kept. The rename is refused if any other file in the
+    folder already uses *new_stem* (compared case-insensitively, as the
+    dump storage is FAT). If one file fails to rename, the files already
+    renamed are put back.
+
+    Returns (code, new_path) where code is RENAME_OK, RENAME_INVALID,
+    RENAME_EXISTS or RENAME_FAILED, and new_path is the renamed *path*
+    (or the original *path* when nothing was renamed).
+    """
+    if not path or not is_valid_dump_name(new_stem):
+        return RENAME_INVALID, path
+    directory = os.path.dirname(path)
+    old_stem = os.path.splitext(os.path.basename(path))[0]
+    if new_stem == old_stem:
+        return RENAME_OK, path
+
+    sources = dump_set_files(path, whole_set)
+    if path not in sources:
+        sources.append(path)
+
+    # Refuse if another file already uses the new name
+    try:
+        entries = os.listdir(directory)
+    except OSError:
+        return RENAME_FAILED, path
+    own = set(os.path.basename(s) for s in sources)
+    for f in entries:
+        if f in own:
+            continue
+        if os.path.splitext(f)[0].lower() == new_stem.lower():
+            return RENAME_EXISTS, path
+
+    done = []
+    try:
+        for src in sources:
+            ext = os.path.splitext(src)[1]
+            dst = os.path.join(directory, new_stem + ext)
+            os.rename(src, dst)
+            done.append((src, dst))
+    except OSError:
+        for src, dst in reversed(done):
+            try:
+                os.rename(dst, src)
+            except OSError:
+                pass
+        return RENAME_FAILED, path
+
+    return RENAME_OK, os.path.join(directory, new_stem + os.path.splitext(path)[1])
+
+
 def log_to_file(msg):
     """Append message to log file."""
     try:
