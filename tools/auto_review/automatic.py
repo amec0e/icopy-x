@@ -96,6 +96,18 @@ def identity(pr):
     return dict(repository_id=REPOSITORY_ID, pr=integer(pr['number']), base=base, head=head)
 
 
+def current_pr(api, number):
+    """PR base.sha can lag main even on an open PR; resolve the live Git ref."""
+    pr = api('GET', route('/pulls/' + str(integer(number))))
+    reference = api('GET', route('/git/ref/heads/main'))
+    commit = reference.get('object', {})
+    if (reference.get('ref') != 'refs/heads/main' or commit.get('type') != 'commit' or
+            not isinstance(commit.get('sha'), str) or not SHA.fullmatch(commit['sha'])):
+        raise ValueError('Invalid current main reference')
+    pr['base'] = dict(pr['base'], sha=commit['sha'])
+    return pr
+
+
 def marker(comment):
     if comment.get('user', {}).get('id') != BOT_ID:
         return None
@@ -221,7 +233,7 @@ def select(api, environ, output, prepare_fn=prepare, now=None):
         requested = integer(int(requested))
         prs = [pr for pr in prs if pr['number'] == requested]
     for entry in prs:
-        pr = api('GET', route('/pulls/' + str(integer(entry['number']))))
+        pr = current_pr(api, entry['number'])
         if pr.get('draft') or pr.get('state') != 'open':
             continue
         current = identity(pr)
@@ -238,10 +250,22 @@ def select(api, environ, output, prepare_fn=prepare, now=None):
             continue
         record = dict(current, state='DEFERRED', reserved_at=None, run_id=run_id)
         comment_id = previous[0]['id'] if previous else None
+        if comment_id is None:
+            # A main update need not add another "please update your branch"
+            # comment. Only reuse notices that never reserved paid work; paid
+            # records remain durable even when their source identity is obsolete.
+            reusable = [comment for comment in comments if marker(comment) and
+                        marker(comment)['pr'] == current['pr'] and
+                        marker(comment)['head'] == current['head'] and
+                        marker(comment)['reserved_at'] is None and
+                        marker(comment)['state'] in ('INCOMPLETE', 'DEFERRED')]
+            if reusable:
+                comment_id = reusable[-1]['id']
         if len(reserved) >= limit:
             if previous is None:
                 put_comment(api, record, '**DEFERRED** — the rolling 24-hour automatic review allowance is used. '
-                            'The queue will reconsider this commit when capacity is available; CI continues normally.')
+                            'The queue will reconsider this commit when capacity is available; CI continues normally.',
+                            comment_id)
             continue
         try:
             bundle = prepare_fn(pr, Path('.'))
@@ -259,7 +283,7 @@ def select(api, environ, output, prepare_fn=prepare, now=None):
                 'a focused review with explicit context. This is not a completed source audit.', comment_id)
             continue
         # Recheck after fetching/collecting and immediately before reservation.
-        fresh = api('GET', route('/pulls/' + str(current['pr'])))
+        fresh = current_pr(api, current['pr'])
         if fresh.get('state') != 'open' or fresh.get('draft') or not same(identity(fresh), current):
             continue
         record.update(state='RESERVED', reserved_at=timestamp(reservation_clock()))
@@ -296,7 +320,7 @@ def run_review(api, environ, directory, review_fn=reviewer.review):
     record, bundle, policy = checked_input(directory, environ)
     if environ.get('GITHUB_RUN_ATTEMPT') != '1':
         raise ValueError('Workflow reruns cannot resubmit paid reviews')
-    current = api('GET', route('/pulls/' + str(record['pr'])))
+    current = current_pr(api, record['pr'])
     if current.get('state') != 'open' or current.get('draft') or not same(identity(current), record):
         cli.save_report(directory, dict(status='INCOMPLETE', advisory=True, error='StaleReview'))
         return 2
@@ -306,7 +330,7 @@ def run_review(api, environ, directory, review_fn=reviewer.review):
         cli.save_report(directory, value)
         count = len(value.get('attempts', []))
         if count > started_passes:
-            fresh = api('GET', route('/pulls/' + str(record['pr'])))
+            fresh = current_pr(api, record['pr'])
             if fresh.get('state') != 'open' or fresh.get('draft') or not same(identity(fresh), record):
                 raise ValueError('PR changed before next generation')
             started_passes = count
@@ -321,7 +345,7 @@ def publish(api, environ, directory):
     saved = marker(comment)
     if not saved or not same(saved, record) or saved['run_id'] != record['run_id'] or saved['state'] != 'RESERVED':
         raise ValueError('Publication reservation mismatch')
-    current = api('GET', route('/pulls/' + str(record['pr'])))
+    current = current_pr(api, record['pr'])
     if current.get('state') != 'open' or current.get('draft') or not same(identity(current), record):
         final = dict(saved, state='STALE')
         text = '**STALE** — the PR closed, became a draft, or its base/head changed. '

@@ -20,6 +20,7 @@ class FakeGitHub:
         self.reads = []
         self.next_prs = []
         self.old_run = {'status': 'completed'}
+        self.main_sha = pr['base']['sha']
 
     def __call__(self, method, route, data=None):
         path = urlsplit(route).path.removeprefix('/repos/' + auto.REPOSITORY)
@@ -31,6 +32,8 @@ class FakeGitHub:
                 return [copy.deepcopy(self.pr)]
             if path == '/pulls/123':
                 return copy.deepcopy(self.next_prs.pop(0) if self.next_prs else self.pr)
+            if path == '/git/ref/heads/main':
+                return dict(ref='refs/heads/main', object={'type': 'commit', 'sha': self.main_sha})
             if path == '/issues/comments':
                 return copy.deepcopy(self.global_comments + self.comments)
             if path == '/issues/123/comments':
@@ -152,6 +155,24 @@ class AutomaticTests(unittest.TestCase):
         self.assertFalse(self.select())
         self.assertFalse(self.api.writes)
 
+    def test_stale_pr_base_metadata_is_replaced_by_current_main_ref(self):
+        self.pr['base']['sha'] = 'd' * 40
+        seen = []
+        def prepare(pr, repo):
+            seen.append(pr['base']['sha'])
+            return copy.deepcopy(self.bundle)
+        self.assertTrue(auto.select(self.api, self.env, self.directory, prepare, self.now))
+        self.assertEqual(seen, ['a' * 40])
+        self.assertEqual(auto.marker(self.api.comments[0])['base'], 'a' * 40)
+
+    def test_main_movement_is_detected_even_when_pr_metadata_does_not_change(self):
+        self.select(); self.save_result()
+        self.api.main_sha = 'd' * 40
+        self.assertEqual(auto.run_review(self.api, self.env, self.directory,
+                         lambda *a, **kw: self.fail('Paid call against obsolete base')), 2)
+        auto.publish(self.api, self.env, self.directory)
+        self.assertEqual(auto.marker(self.api.comments[0])['state'], 'STALE')
+
     def test_collection_gaps_return_explanation_without_paid_reservation(self):
         self.bundle['gaps'] = [{'path': 'binary', 'reason': 'binary payload'}]
         self.assertFalse(self.select())
@@ -159,6 +180,21 @@ class AutomaticTests(unittest.TestCase):
         self.assertEqual(record['state'], 'INCOMPLETE')
         self.assertIsNone(record['reserved_at'])
         self.assertIn('no API call made', self.api.comments[0]['body'])
+
+    def test_base_updates_reuse_unpaid_notices_without_erasing_paid_ledger(self):
+        self.bundle['gaps'] = [{'path': 'binary', 'reason': 'binary payload'}]
+        self.assertFalse(self.select())
+        self.api.main_sha = 'd' * 40
+        self.assertFalse(self.select())
+        self.assertEqual(len(self.api.comments), 1)
+        self.assertEqual(auto.marker(self.api.comments[0])['base'], 'd' * 40)
+        paid = auto.marker(self.api.comments[0])
+        paid['reserved_at'] = '2026-10-19T17:00:00Z'
+        self.api.comments[0]['body'] = auto.body(paid, 'Prior paid result')
+        self.api.main_sha = 'e' * 40
+        self.assertFalse(self.select())
+        self.assertEqual(len(self.api.comments), 2)
+        self.assertEqual(auto.marker(self.api.comments[0])['reserved_at'], '2026-10-19T17:00:00Z')
 
     def test_changed_head_before_model_prevents_api_call(self):
         self.select(); self.pr['head']['sha'] = 'd' * 40

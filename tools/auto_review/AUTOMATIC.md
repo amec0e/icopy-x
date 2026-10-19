@@ -36,7 +36,10 @@ no API key. Inputs record repository ID, PR, current base/head, trusted tool
 revision, policy hash and snapshot hash. Each stage verifies the same-run
 identity. Current PR state is rechecked after collection, before each generation,
 and immediately before publication. A push/close/draft transition makes the old
-result stale; findings are not presented as a review of the new code. A change
+result stale. The current main SHA is resolved from its Git reference separately:
+GitHub's PR metadata can retain an older `base.sha`. Changes to the actual base
+also invalidate the result. Obsolete findings are not presented as a review of
+the new code. A change
 immediately after the final check remains a normal race, so every comment names
 the immutable reviewed commits and is never a required merge check.
 
