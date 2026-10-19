@@ -25,9 +25,9 @@ first priority. **Factory means the original manufacturer, not Lab401.**
   hardware was validated.
 - **Use the support provided by review.** CI runs host tests, builds packages and
   checks both IPKs in maintained QEMU; you do not need our private image or server.
-  Maintainers help identify appropriate fixtures and physical tests. Astra is
-  currently an advisory pilot; its feedback supplements human review. Fork CI
-  may require maintainer approval. Passing checks is evidence, not merge approval.
+  Maintainers help identify appropriate fixtures and physical tests. Astra posts
+  advisory findings, scope feedback and coverage gaps; humans decide what merges.
+  Fork CI may require maintainer approval. Passing checks is evidence, not merge approval.
 
 See [maintainer acceptance](docs/CONTRIBUTION_REVIEW.md) and
 [current validation coverage](docs/VALIDATION_STATUS.md) for testing limits.

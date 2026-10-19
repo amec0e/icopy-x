@@ -482,31 +482,43 @@ generation budget, not a transport timeout.
 
 ## Current acceptance and remaining work
 
-Keep the pilot manual and advisory. The narrowed submenu policy and caller
-profiles have useful regression evidence; the diagnostic control also shows why
-unexpected supported findings must be assessed instead of discarded. The corpus
-is small, selected and partly synthetic, with no independent human labeling or
-statistical accuracy claim.
+The reviewer is available for a limited [automatic advisory rollout](AUTOMATIC.md).
+Existing host/build/QEMU checks and maintainer decisions remain the merge criteria;
+the model never approves or merges. Generation and publication use separate jobs,
+with source identity checks, durable reservations and no automatic paid retries.
+The queue starts with three automatic reviews per rolling 24 hours. Manual pilot
+evaluations remain available separately. This is an invocation allowance, not a
+dollar ceiling or an accuracy guarantee.
 
-Update after #102: the maintainer authorized generous baseline limits instead
-of further incremental cap increases. [Run 39297199836](https://github.com/lab-401/icopy-x/actions/runs/39297199836)
-returned all three validated passes in 11.53 minutes with no transport or token
-failure. Its final coverage declaration is incomplete, with useful findings and
-named missing source. See the [preserved source assessment](calibration/20261019-baseline/results.json).
-The historical twelve-minute/6,000-token limits described above no longer apply
-to the current pilot. The new limits are 128,000 tokens per pass, 90 minutes
-overall and a 100-minute workflow. Do not describe this successful return as a
-timeout, or turn a qualified advisory into a merge approval.
+The generous-budget [startup baseline](calibration/20261019-baseline/results.json)
+returned all three validated passes in 11.53 minutes (~$10.74 estimated), and the
+[closed-PR evaluation](calibration/20261019-closed-prs/results.json) returned three
+in 7.05 minutes (~$4.68 estimated). Neither hit a token cap or timed out. Both
+retained useful findings while declaring source-coverage gaps. A red advisory
+workflow can therefore contain a useful partial result; inspect its comment,
+summary and artifact instead of treating every red run as a lost generation.
 
-Before automatic invocation/publication:
+Current limits are 128,000 output tokens/pass, 90 minutes overall and a 100-minute
+model job. The historical 6,000-token and twelve-minute settings above no longer
+apply. Keep these baselines and prior failures; do not trim callers, substitute
+models or accept truncated output merely to obtain a complete label.
 
-1. Calibrate generation budgets against representative small and large changes,
-   with explicit per-pass/overall generation, time and spend constraints. Preserve
-   the startup failure; do not silently trim callers, accept truncated output,
-   substitute models or repeatedly increase limits until a case passes.
-2. Add fresh scope-splitting, command-translation and boot/recovery cases with
-   independently assessed expectations. Complete source coverage is not a claim
-   that all defects were found or that hardware was validated.
-3. Implement PR identity/staleness handling, event deduplication, invocation and
-   publication controls, and spend controls separately. Existing deterministic
-   CI and maintainer review remain the merge criteria.
+The evaluation corpus remains small, selected and partly synthetic. Expectations
+were assessed by the same coding agent, not an independent human labeling panel.
+A matching JSON schema proves neither semantic accuracy nor physical behavior.
+Maintain the following work alongside advisory operation:
+
+- Assess new real PRs for missed defects, false positives, justified scope,
+  missing callers, latency and actual usage before tightening limits. Add fresh
+  command-translation, scope-splitting and boot/recovery cases with independently
+  assessed expectations as evidence becomes available.
+- Follow up the startup review's confirmed test/logic concerns: the swallowed
+  QEMU PM3-open assertion, menu focus on return, reverse serial-handle handoff
+  and Windows attachment-cache continuity. These need focused regressions and
+  fixes; successful reviewer delivery does not resolve them.
+- Treat disconnected saved-credential navigation as a product decision. Do not
+  undo the maintainer's requirement to hide the decoder menu without hardware.
+  Historical contributor credits are already removed from current main.
+- Preserve physical acceptance gaps. Mocked serial and QEMU coverage cannot
+  certify genuine ICS USB/RF/write behavior, and no unavailable equipment is
+  recorded as having passed.
