@@ -9783,14 +9783,12 @@ class WarningT5X4X05KeyEnterActivity(BaseActivity):
 
 
 class ICSDecoderActivity(IClassSEActivity):
-    FEATURE_VERSION = 'v1.1'
     STATE_HOME = 'home'
     STATE_DECODED = 'decoded'
     STATE_SAVED = 'saved'
     STATE_SAVED_ACTIONS = 'saved_actions'
     STATE_DETAILS = 'details'
     STATE_NAMING = 'naming'
-    STATE_ABOUT = 'about'
     STATE_DELETE = 'delete'
 
     def __init__(self, bundle=None):
@@ -9863,7 +9861,6 @@ class ICSDecoderActivity(IClassSEActivity):
         self._show_options(self.STATE_HOME, 'iCS Decoder', [
             ('Read Credential', 'read'),
             ('Saved Credentials', 'saved'),
-            ('About', 'about'),
             ('Back', 'back'),
         ])
 
@@ -10056,15 +10053,6 @@ class ICSDecoderActivity(IClassSEActivity):
         self._details_origin = origin
         self._show_info(self.STATE_DETAILS, 'Credential Details', self._detail_lines())
 
-    def _show_about(self):
-        self._show_info(self.STATE_ABOUT, 'About iCS Decoder', [
-            'iCS Decoder ' + self.FEATURE_VERSION,
-            'iCLASS SE/SEOS credential decoder',
-            'Contributors:',
-            '@Dysonian',
-            '@PhantomPlanet',
-        ])
-
     def _show_naming(self):
         from lib.widget import KeyboardInput
         self._hide_menu()
@@ -10194,7 +10182,7 @@ class ICSDecoderActivity(IClassSEActivity):
                     pass
                 self._ser = None
             self._show_home()
-        elif state in (self.STATE_DECODED, self.STATE_SAVED, self.STATE_ABOUT):
+        elif state in (self.STATE_DECODED, self.STATE_SAVED):
             self._show_home()
         elif state == self.STATE_SAVED_ACTIONS:
             self._show_saved()
@@ -10234,8 +10222,6 @@ class ICSDecoderActivity(IClassSEActivity):
             self._start_read()
         elif action == 'saved':
             self._show_saved()
-        elif action == 'about':
-            self._show_about()
         elif action == 'save':
             self._show_naming()
         elif action == 'details':
@@ -10261,7 +10247,7 @@ class ICSDecoderActivity(IClassSEActivity):
         if key == KEY_M1:
             self._back()
             return
-        if self._state in (self.STATE_DETAILS, self.STATE_ABOUT):
+        if self._state == self.STATE_DETAILS:
             if self._info_view is not None:
                 if key == KEY_UP:
                     self._info_view.scrollUp()
