@@ -95,6 +95,13 @@ def run(main, root, pump):
         assert actions()[main.lv_main_page.selection()] == 'settings_menu'
         assert main.lv_main_page._items[-2] == 'ICS Decoder'
         assert all(handle.closed for handle in handles)
+        main.lv_main_page.setSelection(actions().index('iclass_se'))
+        main.onPause()
+        main.onResume()
+        assert 'iclass_se' not in actions()
+        checked_pump(lambda: 'iclass_se' in actions())
+        assert actions()[main.lv_main_page.selection()] == 'iclass_se'
+        # A confirmed removal still falls back to a valid remaining action.
         ports.pop('/dev/ttyACM1')
         checked_pump(lambda: 'iclass_se' not in actions())
         assert actions()[main.lv_main_page.selection()] == 'settings_menu'
