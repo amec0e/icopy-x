@@ -1,7 +1,7 @@
 """Tests for MainActivity — root menu of the iCopy-X.
 
 Covers:
-  - Menu creation (title, buttons, 16 items, icons, initial selection)
+  - Menu creation (title, buttons, 15 default items, icons, initial selection)
   - Navigation (UP/DOWN scroll, OK/M2 launch, pagination)
   - Activity launch dispatch (registry lookup, missing module handling)
   - Battery bar (shown on resume)
@@ -91,10 +91,10 @@ class TestMainMenuCreation:
                 text = canvas.itemcget(iid, "text")
                 assert text == ""
 
-    def test_16_menu_items(self, main_activity):
-        """ListView includes iCS Decoder and Settings."""
+    def test_15_menu_items_without_decoder(self, main_activity):
+        """The accessory is hidden until its hardware identity is confirmed."""
         assert main_activity.lv_main_page is not None
-        assert len(main_activity.lv_main_page._items) == 16
+        assert len(main_activity.lv_main_page._items) == 15
 
     def test_item_labels_correct_order(self, main_activity):
         """Menu items should appear in the verified v1.0.90 order."""
@@ -102,7 +102,7 @@ class TestMainMenuCreation:
             "Auto Copy", "Dump Files", "Scan Tag", "Read Tag",
             "Sniff TRF", "Simulation", "PC-Mode", "Diagnosis",
             "Backlight", "Volume", "About", "Erase Tag",
-            "Time Settings", "LUA Script", "ICS Decoder", "Settings",
+            "Time Settings", "LUA Script", "Settings",
         ]
         assert main_activity.lv_main_page._items == expected
 
@@ -111,7 +111,7 @@ class TestMainMenuCreation:
         expected_icons = [
             "1", "2", "3", "4", "5", "6", "7",
             "diagnosis", "8", "9",
-            "list", "erase", "time", "script", "47", "3",
+            "list", "erase", "time", "script", "3",
         ]
         icons = main_activity.lv_main_page._icons
         for i, expected in enumerate(expected_icons):
@@ -152,12 +152,12 @@ class TestMainMenuNavigation:
         """UP key should move selection back by 1 (wraps to end from 0)."""
         assert main_activity.lv_main_page.selection() == 0
         main_activity.onKeyEvent('UP')
-        # Wraps to last item (index 15)
-        assert main_activity.lv_main_page.selection() == 15
+        # Wraps to Settings (the last visible item).
+        assert main_activity.lv_main_page.selection() == 14
 
     def test_down_wraps_at_end(self, main_activity):
         """DOWN from last item should wrap to first item."""
-        main_activity.lv_main_page.setSelection(15)
+        main_activity.lv_main_page.setSelection(14)
         main_activity.onKeyEvent('DOWN')
         assert main_activity.lv_main_page.selection() == 0
 
@@ -165,7 +165,7 @@ class TestMainMenuNavigation:
         """UP from first item should wrap to last item."""
         assert main_activity.lv_main_page.selection() == 0
         main_activity.onKeyEvent('UP')
-        assert main_activity.lv_main_page.selection() == 15
+        assert main_activity.lv_main_page.selection() == 14
 
     def test_ok_launches_activity(self, main_activity):
         """OK key should attempt to launch the selected activity."""
@@ -349,7 +349,7 @@ class TestMainMenuActivityLaunch:
             "autocopy", "dump_files", "scan", "read_list",
             "sniff", "simulation", "pcmode", "diagnosis",
             "backlight", "volume", "about", "erase",
-            "time_settings", "lua_script", "iclass_se", "settings_menu",
+            "time_settings", "lua_script", "settings_menu",
         ]
         for i, expected_key in enumerate(expected_keys):
             _label, _icon, action_key = main_activity._menu_items[i]

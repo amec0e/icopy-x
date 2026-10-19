@@ -31,6 +31,8 @@ in the original actmain.so (252KB, 129 functions, 43 methods across
 
 import logging
 import importlib
+import queue
+import threading
 
 from lib.actbase import BaseActivity
 from lib import actstack
@@ -169,6 +171,13 @@ class MainActivity(BaseActivity):
 
         # Settings is always the last menu item
         self._menu_items.append(("Settings", "3", "settings_menu"))
+        self._menu_catalog = list(self._menu_items)
+        self._menu_items = [item for item in self._menu_catalog if item[2] != 'iclass_se']
+        self._decoder_presence = None
+        self._decoder_worker = None
+        self._decoder_cancel = threading.Event()
+        self._decoder_results = queue.Queue()
+        self._decoder_timer = None
 
     def onCreate(self, bundle=None):
         """Set up the main menu.
@@ -222,6 +231,69 @@ class MainActivity(BaseActivity):
                 self._labels_lang = resources.getLanguage()
             if not self.lv_main_page.isShowing():
                 self.lv_main_page.show()
+        self._updateTitle()
+
+        # Schedule from Tk only. Workers put results in a queue; they never
+        # touch a paused/destroyed activity's canvas or call Tk.after().
+        self._set_decoder_visible(False)
+        if self._decoder_timer is None and self.getCanvas() is not None:
+            self._decoder_timer = self.getCanvas().after(250, self._poll_decoder)
+
+    def onPause(self):
+        self._stop_decoder_poll()
+        super().onPause()
+
+    def onDestroy(self):
+        self._stop_decoder_poll()
+        super().onDestroy()
+
+    def _stop_decoder_poll(self):
+        self._decoder_cancel.set()
+        if self._decoder_timer is not None:
+            self.getCanvas().after_cancel(self._decoder_timer)
+            self._decoder_timer = None
+
+    def _poll_decoder(self):
+        self._decoder_timer = None
+        if not self.resumed or self.life.destroyed:
+            return
+        while not self._decoder_results.empty():
+            token, present = self._decoder_results.get_nowait()
+            if token is self._decoder_cancel and not token.is_set():
+                self._set_decoder_visible(present)
+        if self._decoder_worker is None or not self._decoder_worker.is_alive():
+            self._decoder_cancel = threading.Event()
+            token = self._decoder_cancel
+
+            def check():
+                try:
+                    if self._decoder_presence is None:
+                        import ics_decoder
+                        self._decoder_presence = ics_decoder.DecoderPresence()
+                    present = self._decoder_presence.check(token.is_set)
+                except Exception:
+                    logger.exception('Could not check ICS Decoder presence')
+                    present = False
+                self._decoder_results.put((token, present))
+
+            self._decoder_worker = threading.Thread(target=check, daemon=True)
+            self._decoder_worker.start()
+        self._decoder_timer = self.getCanvas().after(1000, self._poll_decoder)
+
+    def _set_decoder_visible(self, present):
+        items = [item for item in self._menu_catalog
+                 if item[2] != 'iclass_se' or present]
+        if items == self._menu_items:
+            return
+        selected = self.lv_main_page.selection() if self.lv_main_page else 0
+        action = self._menu_items[selected][2]
+        self._menu_items = items
+        if self.lv_main_page is not None:
+            self.lv_main_page.setItems([self._menu_label(item) for item in items])
+            self.lv_main_page.setIcons([item[1] for item in items])
+            selected = next((i for i, item in enumerate(items) if item[2] == action),
+                            min(selected, len(items) - 1))
+            self.lv_main_page.setSelection(selected)
         self._updateTitle()
 
     def onKeyEvent(self, key):

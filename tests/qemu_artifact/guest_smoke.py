@@ -110,7 +110,8 @@ try:
         finally:
             sys.path.pop(0)
         harness_paths.update(harness.parent / name for name in
-                             ('critical_flows.py', 'strict_transport.py', 'ultralight_cases.py', 'recovery_transport.py'))
+                             ('critical_flows.py', 'strict_transport.py', 'ultralight_cases.py',
+                              'recovery_transport.py', 'decoder_menu_case.py'))
         critical = critical_flows.run(root, output, variant, errors)
 finally:
     root.destroy()
