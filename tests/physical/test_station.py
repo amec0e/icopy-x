@@ -205,6 +205,42 @@ def test_ui_failure_with_punctuation_is_detected(controller):
         controller.wait(['Read successful'], 1)
 
 
+@pytest.mark.parametrize('changed', ['ChkDIC...7/32keys', 'Read successful'])
+def test_cancel_rechecks_changing_counter_and_refuses_completed_phase(controller, fixture, monkeypatch, changed):
+    from tools.physical.screen import require_screen
+    fixture.update(start_texts=['Selected Classic 1K'],
+                   busy_texts=[{'template': 'ChkDIC...{n}/32keys'}])
+    controller.transport.screen = fixture['start_texts']
+    success = fixture['success_texts'] + ['UID: 01 23 45 67']
+    actual = {'new.bin': dict(sha256='a' * 64, size=1024, mtime_ns=1)}
+    keys = []
+    original_call = controller.transport.call
+
+    def call(session, operation, **kwargs):
+        if operation == 'key':
+            if kwargs['key'] == 'PWR':
+                # Counter/phase changed after host observation, before device guard.
+                controller.transport.screen = [changed]
+            require_screen(kwargs['expected'], controller.transport.screen)
+            keys.append(kwargs['key'])
+            controller.transport.screen = (fixture['start_texts'] if kwargs['key'] == 'PWR'
+                else ['ChkDIC...0/32keys'] if len(keys) == 1 else success)
+        result = original_call(session, operation, **kwargs)
+        return (actual if len(keys) == 3 else {}) if operation == 'dumps' else result
+
+    monkeypatch.setattr(controller.transport, 'call', call)
+    monkeypatch.setattr(station.time, 'sleep', lambda _: None)
+    if changed.startswith('ChkDIC'):
+        controller.read_card(fixture, cancel=True)
+        assert keys == ['OK', 'PWR', 'OK']
+        assert controller.state['cases'][-1]['status'] == 'PASS'
+    else:
+        with pytest.raises(ValueError, match='Unexpected screen'):
+            controller.read_card(fixture, cancel=True)
+        assert keys == ['OK']
+        assert controller.state['uncertain_action']
+
+
 def test_late_successful_observation_cannot_pass_recovery_deadline(controller, monkeypatch):
     controller.transport.screen = ['Read successful']
     clock = iter([0, 0, 6])

@@ -72,6 +72,14 @@ data or manually validate a baseline dump. Do not automatically bless a dump jus
 because the application said it succeeded. Choose a stable raw `.bin`/`.eml`
 representation; timestamp-bearing formats need a future semantic validator.
 
+For a changing counter, enroll a numeric template explicitly, for example
+`"busy_texts": [{"template": "ChkDIC...{n}/32keys"}]`. Only `{n}` varies (1-10
+ASCII digits); punctuation, surrounding text and the enrolled total remain exact.
+Multiple expectations must all match. Ordinary string expectations remain exact.
+Do not replace the busy guard with a generic title shared by idle/result screens.
+Both host polling and the device's last input check use the same matcher. A phase
+change still refuses input; there is no automatic retry or relaxed fallback.
+
 * `read --fixture /private/card.json` starts from the explicitly selected Read
   type, waits at most the fixture deadline, and requires the expected UID, success
   texts and exactly one newly written matching dump of the correct size/hash.
