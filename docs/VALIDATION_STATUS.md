@@ -93,16 +93,21 @@ patched pins, and Dependabot checks test/station requirements and Actions weekly
 Legacy dependency alerts remain open; see [TEST_DEPENDENCIES.md](TEST_DEPENDENCIES.md).
 These changes are separate from a device-runtime migration.
 The [Astra advisory pilot](../tools/auto_review/README.md) from #88 is available as
-a manual workflow on trusted main. Its 22 offline contracts passed on Linux and
-Windows. [Hosted preparation 39248718899](https://github.com/lab-401/icopy-x/actions/runs/39248718899)
+a manual workflow on trusted main. The diagnostic update #90 has 27 offline
+contracts passing on Linux and Windows, with host/build/QEMU checks passed before
+merge. [Hosted preparation 39248718899](https://github.com/lab-401/icopy-x/actions/runs/39248718899)
 completed without an API key and produced the same immutable snapshot digest as
 the local historical-menu trial. This validates hosted collection, not model
 quality. The first [live trial](https://github.com/lab-401/icopy-x/actions/runs/39252019439)
 confirmed service-account authentication and Astra access, but response/evidence
-validation rejected its first response. No accepted review was produced. The
-diagnostic update adds fixed failure codes and numbered source lines, with 27
-offline contracts; a live retest and clean-change controls remain pending. See
-[the evaluation record](../tools/auto_review/EVALUATION.md). The API key is in the main-only
+validation rejected its first response. After fixed diagnostics and numbered
+source were added, three live trials completed nine validated responses. The
+known Move regression was identified and two removal controls found no introduced
+defects. Each final review correctly retained context gaps; no live trial has
+established complete review coverage. The next work is bounded reference/context
+collection and a broader labeled evaluation, not automatic enforcement. See
+[the evaluation record](../tools/auto_review/EVALUATION.md) for exact revisions,
+findings and usage. The API key is in the main-only
 `astra-review` environment. Automatic invocation/publication and a model gate
 remain unimplemented. Human scope review is still required, especially for
 boot/update, translation, firmware, Lua selection, USB ownership and build changes.

@@ -61,6 +61,11 @@ fixed `validation_code` and `failure_stage`, not raw API/exception text. For
 example, `source_citation` means a quote or line did not match the evidence;
 `file_coverage` means the changed-file inventory was not covered exactly.
 This aids diagnosis without accepting, repairing or retrying a rejected result.
+An `INCOMPLETE` report with a validated `review` and no `error` can instead mean
+the model explicitly identified missing context. Inspect `review.limitations`;
+a red workflow is not necessarily an API failure. Supply justified context in a
+new manual invocation, preserving the previous result. Do not convert that
+coverage gap into a pass or automatically retry it.
 Allowed cache/reasoning token counts and truncation reasons are retained when
 returned by the API; the report is not a billing invoice.
 
