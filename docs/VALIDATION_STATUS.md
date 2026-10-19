@@ -103,7 +103,7 @@ confirmed service-account authentication and Astra access, but response/evidence
 validation rejected its first response. After fixed diagnostics and numbered
 source were added, three live trials completed nine validated responses. The
 known Move regression was identified and two removal controls found no introduced
-defects. Each final review correctly retained context gaps; no live trial has
+defects. Each final review reported remaining context gaps; no live trial has
 established complete review coverage. The next work is bounded reference/context
 collection and a broader labeled evaluation, not automatic enforcement. See
 [the evaluation record](../tools/auto_review/EVALUATION.md) for exact revisions,

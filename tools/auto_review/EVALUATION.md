@@ -129,6 +129,15 @@ deleted helpers or a traced JSON consumer. Adding individual context files canno
 establish that all relevant callers have been found. The report's discussion of
 pre-existing M2 dispatch is not an accepted new defect or a finding against #82.
 
+Coverage requests also need scrutiny. Independent source inspection found the
+entry point at `src/lib/application.py:156` starts `actmain.MainActivity`, whose
+supplied implementation builds its widgets directly. A runtime consumer for the
+JSON screen specification is not established by that path. Requiring such a
+consumer may be overcautious; the next collector must establish whether a file
+is runtime input or a reference specification rather than assume either role.
+These trials do not establish that every model-requested context item is needed,
+or measure how often a clean change is unnecessarily labeled incomplete.
+
 Recorded usage: 666,301 input tokens, 6,884 output tokens, 662,861 cache-write
 tokens, 3,431 cached-input tokens and 161.683 API seconds. Larger manually selected
 context approximately doubled input usage compared with the first clean trial,
