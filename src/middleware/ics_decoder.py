@@ -13,6 +13,7 @@ import re
 import os
 import sys
 import time
+import threading
 
 try:
     import serial
@@ -36,6 +37,9 @@ _READLINE_TIMEOUT = 1.2  # USB CDC ACM needs >=1.0s for reliable WHO response
 # src/main/main.py and pm3_flash.py reserve this port for the internal PM3.
 # Sending the accessory handshake to it can disturb the running PM3 client.
 _PM3_PORT = '/dev/ttyACM0'
+# Presence checks retain this lock through closing the temporary handle, while
+# reusing detect_decoder's guarded handshake on the same thread.
+_detection_lock = threading.RLock()
 _ICLASS_KEYS = ('AFA785A7DAB33378', '2020666666668888')
 _ANSI_ESCAPE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
 _PM3_FAILURE = re.compile(
@@ -140,74 +144,144 @@ def _open_serial(port):
         return None
 
 
-def detect_decoder():
-    """Scan serial ports for the ICS Decoder.
+def decoder_ports():
+    """Enumerate existing accessory candidates, excluding the reserved PM3.
 
-    Returns the serial handle if a device replies with ISE to Who,
-    otherwise closes any opened handle and returns None.
-
-    Uses strict timeouts to prevent UI blocking.
+    USB bridge IDs are not decoder identities. Only the protocol handshake
+    establishes that. Never fall back to guessing COM1 through COM256.
     """
-    _log('DETECT_DECODER_START')
-    _log('CWD={}'.format(os.getcwd()))
-    _log('LOG_PATH={}'.format(_log_path_used))
-
-    if serial is None:
-        _log('DETECT_DECODER: serial module is None')
-        return None
-
     candidates = []
 
     if sys.platform.startswith('linux'):
         for g in ('/dev/ttyACM*', '/dev/ttyUSB*'):
             candidates.extend(glob.glob(g))
-        seen = set()
-        candidates = [c for c in candidates if not (c in seen or seen.add(c))]
     elif sys.platform.startswith('win'):
         if _comports is not None:
             try:
                 candidates = [p.device for p in _comports()]
             except Exception:
                 candidates = []
-        if not candidates:
-            for i in range(1, 257):
-                candidates.append('COM%d' % i)
     elif sys.platform.startswith('darwin'):
         for g in ('/dev/cu.usbmodem*', '/dev/cu.usbserial*'):
             candidates.extend(glob.glob(g))
-        seen = set()
-        candidates = [c for c in candidates if not (c in seen or seen.add(c))]
-
-    _log('DETECT_DECODER candidates={}'.format(candidates))
-
+    seen = set()
+    result = []
     for port in candidates:
-        if (sys.platform.startswith('linux') and
-                os.path.realpath(port) == os.path.realpath(_PM3_PORT)):
+        identity = os.path.realpath(port)
+        if _is_pm3_port(port) or identity in seen:
             continue
-        ser = _open_serial(port)
-        if ser is None:
-            continue
-        try:
-            # Small delay for decoder to stabilize after port open
-            time.sleep(0.1)
-            # Flush any stale data in input buffer
-            ser.reset_input_buffer()
-            ser.write(_CMD_WHO.encode('utf-8'))
-            line = ser.readline().decode('utf-8', errors='ignore').strip()
-            _log('DETECT_DECODER port={} response={}'.format(port, line))
-            if line == 'ISE':
-                _log('DETECT_DECODER FOUND {}'.format(port))
-                return ser  # Return OPEN port - do NOT close
-        except Exception as e:
-            _log('DETECT_DECODER port={} error={}'.format(port, e))
-        # Only close on error/failure, not on success
-        try:
-            ser.close()
-        except Exception:
-            pass
+        seen.add(identity)
+        result.append(port)
+    return result
 
-    _log('DETECT_DECODER: no decoder found')
+
+def _is_pm3_port(port):
+    return (sys.platform.startswith('linux') and
+            os.path.realpath(port) == os.path.realpath(_PM3_PORT))
+
+
+def detect_decoder(ports=None, cancelled=lambda: False, quiet=False):
+    """Return an open handle only after Who/ISE; close every rejected handle.
+
+    The menu supplies newly attached candidates and a cancellation predicate.
+    The activity's normal scan shares the lock so it cannot race that probe.
+    Serial timeouts bound each attempt; cancellation is checked between I/O.
+    """
+    if serial is None:
+        return None
+    with _detection_lock:
+        for port in decoder_ports() if ports is None else ports:
+            if cancelled():
+                break
+            # Keep this guard at the opening boundary too, including callers
+            # supplying a candidate list and aliases resolving to ttyACM0.
+            if _is_pm3_port(port):
+                continue
+            ser = _open_serial(port)
+            if ser is None:
+                continue
+            accepted = False
+            try:
+                time.sleep(0.1)
+                if cancelled():
+                    continue
+                ser.reset_input_buffer()
+                ser.write(_CMD_WHO.encode('utf-8'))
+                # Bound bytes as well as time; corrupted input must not turn
+                # into an identity by dropping invalid UTF-8 bytes.
+                line = ser.readline(32).strip(b'\r\n')
+                if not quiet:
+                    _log('DETECT_DECODER port={} response={!r}'.format(port, line))
+                if line == b'ISE' and not cancelled():
+                    accepted = True
+                    return ser
+            except Exception as error:
+                if not quiet:
+                    _log('DETECT_DECODER port={} error={}'.format(port, error))
+            finally:
+                if not accepted:
+                    try:
+                        ser.close()
+                    except Exception:
+                        pass
+
     return None
+
+
+class DecoderPresence:
+    """Worker-owned cache: probe an attachment, then only watch enumeration.
+
+    A devnode's inode/ctime distinguishes unplug/replug even at the same path
+    between polls. Three attempts allow firmware startup; unrelated ports are
+    not reopened indefinitely. No verified accessory USB-ID list is known.
+    """
+
+    def __init__(self):
+        self._attachments = {}
+
+    def _snapshot(self):
+        result = {}
+        for port in decoder_ports():
+            identity = (os.path.realpath(port),)
+            if not sys.platform.startswith('win'):
+                try:
+                    info = os.stat(port)
+                except OSError:
+                    continue  # unplugged during enumeration
+                identity += (info.st_ino, info.st_ctime_ns)
+            result[identity] = port
+        return result
+
+    def check(self, cancelled):
+        ports = self._snapshot()
+        self._attachments = {key: value for key, value in self._attachments.items()
+                             if key in ports}
+        for identity, port in ports.items():
+            if cancelled():
+                return False
+            present, attempts = self._attachments.get(identity, (False, 0))
+            if present:
+                return True
+            if attempts >= 3:
+                continue
+            # Keep the handoff atomic: detect_decoder normally transfers an
+            # open handle to its caller, but a menu probe must finish closing
+            # that handle before a reading activity can open the same port.
+            with _detection_lock:
+                ser = detect_decoder([port], cancelled=cancelled, quiet=True)
+                try:
+                    present = ser is not None
+                finally:
+                    if ser is not None:
+                        ser.close()
+            if cancelled():
+                return False
+            self._attachments[identity] = (present, attempts + 1)
+            if present:
+                # Do not publish a handshake from a port that disappeared
+                # during the bounded probe.
+                return identity in self._snapshot()
+        return False
 
 
 def read_card(ser):

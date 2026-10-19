@@ -90,7 +90,7 @@
             ]
         },
         "buttons": {
-            "left": "Move",
+            "left": null,
             "right": null
         },
         "keys": {

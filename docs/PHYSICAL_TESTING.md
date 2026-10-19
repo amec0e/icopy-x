@@ -72,6 +72,14 @@ data or manually validate a baseline dump. Do not automatically bless a dump jus
 because the application said it succeeded. Choose a stable raw `.bin`/`.eml`
 representation; timestamp-bearing formats need a future semantic validator.
 
+For a changing counter, enroll a numeric template explicitly, for example
+`"busy_texts": [{"template": "ChkDIC...{n}/32keys"}]`. Only `{n}` varies (1-10
+ASCII digits); punctuation, surrounding text and the enrolled total remain exact.
+Multiple expectations must all match. Ordinary string expectations remain exact.
+Do not replace the busy guard with a generic title shared by idle/result screens.
+Both host polling and the device's last input check use the same matcher. A phase
+change still refuses input; there is no automatic retry or relaxed fallback.
+
 * `read --fixture /private/card.json` starts from the explicitly selected Read
   type, waits at most the fixture deadline, and requires the expected UID, success
   texts and exactly one newly written matching dump of the correct size/hash.
@@ -92,7 +100,11 @@ its USB/accessory tests remain blocked. No writes to source cards are authorized
 by these read cases. Manually requested button navigation can reach other app
 functions, so the operator must inspect its screen precondition.
 
-## PC-mode session at the next device connection
+## PC-mode session procedure
+
+The first complete supervised round trip passed; see the
+[19 October acceptance record](PHYSICAL_ACCEPTANCE_20261019.md). Use this
+procedure for later PC-mode acceptance, with fresh sessions and exact identities.
 
 Charge the device, attach the Ethernet hub, and prepare the matching host client
 and a known read fixture. Start a session and perform one normal `read` first.

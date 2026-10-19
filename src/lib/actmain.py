@@ -31,11 +31,12 @@ in the original actmain.so (252KB, 129 functions, 43 methods across
 
 import logging
 import importlib
+import queue
+import threading
 
 from lib.actbase import BaseActivity
 from lib import actstack
 from lib import resources
-from lib import menu_order
 from lib.widget import ListView
 from lib._constants import (
     LIST_ITEM_H,
@@ -46,7 +47,6 @@ from lib._constants import (
     KEY_M2,
     KEY_PWR,
     KEY_ALL,
-    SELECT_BG,
 )
 
 logger = logging.getLogger(__name__)
@@ -154,7 +154,6 @@ class MainActivity(BaseActivity):
         # re-localise the root menu when the language changed while away.
         self._labels_lang = None
         self._menu_items = list(self.MENU_ITEMS)
-        self._move_snapshot = None
 
         # --- Plugin integration ---
         # Append "Plugins" submenu entry if there are non-promoted plugins,
@@ -170,21 +169,27 @@ class MainActivity(BaseActivity):
             action_key = "plugin:" + plugin.key
             self._menu_items.append((plugin.name, icon, action_key))
 
-        # Settings is last in the default menu order
+        # Settings is always the last menu item
         self._menu_items.append(("Settings", "3", "settings_menu"))
-        self._menu_items = menu_order.ordered_items(self._menu_items)
+        self._menu_catalog = list(self._menu_items)
+        self._menu_items = [item for item in self._menu_catalog if item[2] != 'iclass_se']
+        self._decoder_presence = None
+        self._decoder_worker = None
+        self._decoder_cancel = threading.Event()
+        self._decoder_results = queue.Queue()
+        self._decoder_timer = None
 
     def onCreate(self, bundle=None):
         """Set up the main menu.
 
         Startup sequence:
             1. setTitle("Main Page")
-            2. setLeftButton("Move") -- M1 reorders the highlighted item
-            3. setRightButton("") -- M2 only labels Cancel in move mode
+            2. setLeftButton("") -- M1 empty on root (no back)
+            3. setRightButton("") -- no button labels on real device
             4. Create ListView at (0, 40) with menu items + icons
         """
-        # Buttons: M1 Move, M2 empty until an item is picked up
-        self.setLeftButton("Move")
+        # Buttons: M1 empty, M2 empty (HANDOVER.md, main_page_1_3_1.png)
+        self.setLeftButton("")
         self.setRightButton("")
 
         # Build ListView
@@ -195,7 +200,6 @@ class MainActivity(BaseActivity):
             self.lv_main_page = ListView(
                 canvas, xy=xy, text_size=text_size, item_height=LIST_ITEM_H,
             )
-            self.lv_main_page.setDisplayItemMax(4)
             labels = [self._menu_label(item) for item in self._menu_items]
             self.lv_main_page.setItems(labels)
             self._labels_lang = resources.getLanguage()
@@ -229,20 +233,72 @@ class MainActivity(BaseActivity):
                 self.lv_main_page.show()
         self._updateTitle()
 
+        # Schedule from Tk only. Workers put results in a queue; they never
+        # touch a paused/destroyed activity's canvas or call Tk.after().
+        self._set_decoder_visible(False)
+        if self._decoder_timer is None and self.getCanvas() is not None:
+            self._decoder_timer = self.getCanvas().after(250, self._poll_decoder)
+
+    def onPause(self):
+        self._stop_decoder_poll()
+        super().onPause()
+
+    def onDestroy(self):
+        self._stop_decoder_poll()
+        super().onDestroy()
+
+    def _stop_decoder_poll(self):
+        self._decoder_cancel.set()
+        if self._decoder_timer is not None:
+            self.getCanvas().after_cancel(self._decoder_timer)
+            self._decoder_timer = None
+
+    def _poll_decoder(self):
+        self._decoder_timer = None
+        if not self.resumed or self.life.destroyed:
+            return
+        while not self._decoder_results.empty():
+            token, present = self._decoder_results.get_nowait()
+            if token is self._decoder_cancel and not token.is_set():
+                self._set_decoder_visible(present)
+        if self._decoder_worker is None or not self._decoder_worker.is_alive():
+            self._decoder_cancel = threading.Event()
+            token = self._decoder_cancel
+
+            def check():
+                try:
+                    if self._decoder_presence is None:
+                        import ics_decoder
+                        self._decoder_presence = ics_decoder.DecoderPresence()
+                    present = self._decoder_presence.check(token.is_set)
+                except Exception:
+                    logger.exception('Could not check ICS Decoder presence')
+                    present = False
+                self._decoder_results.put((token, present))
+
+            self._decoder_worker = threading.Thread(target=check, daemon=True)
+            self._decoder_worker.start()
+        self._decoder_timer = self.getCanvas().after(1000, self._poll_decoder)
+
+    def _set_decoder_visible(self, present):
+        items = [item for item in self._menu_catalog
+                 if item[2] != 'iclass_se' or present]
+        if items == self._menu_items:
+            return
+        selected = self.lv_main_page.selection() if self.lv_main_page else 0
+        action = self._menu_items[selected][2]
+        self._menu_items = items
+        if self.lv_main_page is not None:
+            self.lv_main_page.setItems([self._menu_label(item) for item in items])
+            self.lv_main_page.setIcons([item[1] for item in items])
+            selected = next((i for i, item in enumerate(items) if item[2] == action),
+                            min(selected, len(items) - 1))
+            self.lv_main_page.setSelection(selected)
+        self._updateTitle()
+
     def onKeyEvent(self, key):
         """Handle key input on the main menu."""
         if self.isbusy():
-            return
-
-        if self._move_snapshot is not None:
-            if key == KEY_UP:
-                self._move_item(-1)
-            elif key == KEY_DOWN:
-                self._move_item(1)
-            elif key == KEY_M1:
-                self._place_item()
-            elif key == KEY_M2:
-                self._cancel_move()
             return
 
         if key == KEY_UP:
@@ -265,7 +321,8 @@ class MainActivity(BaseActivity):
                 self._launchActivity(pos)
 
         elif key == KEY_M1:
-            self._pick_up_item()
+            # M1 is empty on main menu -- no action
+            pass
 
         elif key == KEY_ALL:
             # S/R/W button — launch AutoCopy (Scan -> Read -> Write)
@@ -276,62 +333,6 @@ class MainActivity(BaseActivity):
             # PWR triggers shutdown/sleep flow
             # For now, no-op (SleepModeActivity not yet wired)
             pass
-
-    def _refresh_menu(self, selection=None):
-        if self.lv_main_page is None:
-            return
-        if selection is None:
-            selection = self.lv_main_page.selection()
-        labels = [self._menu_label(item) for item in self._menu_items]
-        if self._move_snapshot is not None and 0 <= selection < len(labels):
-            labels[selection] = '[Move] ' + labels[selection]
-        self.lv_main_page.setItems(labels)
-        self.lv_main_page.setIcons([item[1] for item in self._menu_items])
-        self.lv_main_page.setSelection(selection)
-        self._labels_lang = resources.getLanguage()
-        self._updateTitle()
-
-    def _pick_up_item(self):
-        if self.lv_main_page is None or not self._menu_items:
-            return
-        self._move_snapshot = list(self._menu_items)
-        self.setLeftButton('Place')
-        self.setRightButton('Cancel')
-        self.lv_main_page.setupSelectBG('#DCE5F3')
-        self._refresh_menu()
-
-    def _move_item(self, offset):
-        selection = self.lv_main_page.selection()
-        destination = selection + offset
-        if destination < 0 or destination >= len(self._menu_items):
-            return
-        item = self._menu_items.pop(selection)
-        self._menu_items.insert(destination, item)
-        self._refresh_menu(destination)
-
-    def _place_item(self):
-        try:
-            menu_order.save_items(self._menu_items)
-        except OSError:
-            self.setTitle('Menu order not saved')
-            return
-        selection = self.lv_main_page.selection()
-        self._move_snapshot = None
-        self.setLeftButton('Move')
-        self.setRightButton('')
-        self.lv_main_page.setupSelectBG(SELECT_BG)
-        self._refresh_menu(selection)
-
-    def _cancel_move(self):
-        identifier = self._menu_items[self.lv_main_page.selection()][2]
-        self._menu_items = self._move_snapshot
-        self._move_snapshot = None
-        self.setLeftButton('Move')
-        self.setRightButton('')
-        self.lv_main_page.setupSelectBG(SELECT_BG)
-        selection = next(index for index, item in enumerate(self._menu_items)
-                         if item[2] == identifier)
-        self._refresh_menu(selection)
 
     def _launchActivity(self, index):
         """Launch the activity at menu position *index*.
@@ -453,8 +454,6 @@ class MainActivity(BaseActivity):
         [Source: main_page_1_3_1.png, SCREEN_LAYOUT.md "Page indicator"]
         """
         base_title = resources.get_str('main_page')
-        if self._move_snapshot is not None:
-            base_title = 'Move Item'
         if self.lv_main_page is not None:
             total = self.lv_main_page.getPageCount()
             current = self.lv_main_page.getPagePosition() + 1

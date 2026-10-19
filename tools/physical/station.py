@@ -2,6 +2,7 @@
 import argparse
 import base64
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,22 @@ import uuid
 
 HERE = Path(__file__).resolve().parent
 MAX_OUTPUT = 2 * 1024 * 1024
+# Also support private controllers that load station.py by file location.
+_screen_spec = importlib.util.spec_from_file_location('_icopy_screen', HERE / 'screen.py')
+_screen = importlib.util.module_from_spec(_screen_spec)
+_screen_spec.loader.exec_module(_screen)
+screen_matches = _screen.screen_matches
+
+
+def device_source():
+    # The helper runs without an installed repository on the device. Ship the
+    # same small matcher used by host polling, rather than duplicating guards.
+    matcher = (HERE / 'screen.py').read_text(encoding='utf-8')
+    return ('import sys, types\n'
+            '_screen = types.ModuleType("screen")\n'
+            'exec(' + repr(matcher) + ', _screen.__dict__)\n'
+            'sys.modules["screen"] = _screen\n' +
+            (HERE / 'device.py').read_text(encoding='utf-8'))
 
 
 def sha256(path):
@@ -52,7 +69,7 @@ class SSH:
         client.set_missing_host_key_policy(Pinned())
         request = dict(kwargs, operation=operation, session=session)
         payload = base64.b64encode(json.dumps(request).encode()).decode()
-        source = (HERE / 'device.py').read_text(encoding='utf-8')
+        source = device_source()
         source += '\nmain(' + repr(payload) + ')\n'
         encoded = base64.b64encode(source.encode()).decode()
         command = 'python3 -c "import base64;exec(base64.b64decode(\'' + encoded + '\'))"'
@@ -218,6 +235,7 @@ class Station:
         self.store()
 
     def wait(self, expected, timeout):
+        screen_matches(expected, [])  # Reject malformed guards before polling.
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             observed = self.observe()
@@ -227,7 +245,7 @@ class Station:
                 raise TimeoutError('UI deadline')
             if any('read failed' in text.lower() for text in observed):
                 raise ValueError('Device reported Read Failed')
-            if all(text in observed for text in expected):
+            if screen_matches(expected, observed):
                 return observed
             time.sleep(.25)
         raise TimeoutError('UI deadline')
@@ -235,6 +253,8 @@ class Station:
     def read_card(self, fixture, cancel=False):
         if self.state['phase'] not in ('SSH', 'RETURNED'):
             raise ValueError('Read requires SSH phase')
+        for field in ('start_texts', 'success_texts') + (('busy_texts',) if cancel else ()):
+            screen_matches(fixture[field], [])  # Validate before sending any key.
         case_id = uuid.uuid4().hex
         case = dict(id=case_id, kind='cancel-read' if cancel else 'read', status='INCOMPLETE')
         self.state['cases'].append(case)
