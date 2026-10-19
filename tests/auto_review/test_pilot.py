@@ -494,6 +494,18 @@ class PilotTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 profiles.select(name, context, searches)
 
+    def test_context_recipes_reference_tracked_project_files(self):
+        # A source move must alert maintainers in ordinary offline CI, before a
+        # live review encounters a stale recipe. This reads no candidate code.
+        project = Path(__file__).resolve().parents[2]
+        inventory = snapshots.tree(project, 'HEAD')
+        for name, recipe in profiles.PROFILES.items():
+            for path in recipe['paths']:
+                with self.subTest(profile=name, path=path):
+                    self.assertIn(path, inventory)
+                    self.assertEqual(inventory[path]['kind'], 'blob')
+                    self.assertIn(inventory[path]['mode'], ('100644', '100755'))
+
     def test_profile_missing_path_fails_before_api_and_manual_preserves_snapshot(self):
         args = ['prepare', '--repo', str(self.repo), '--base', self.base, '--head', self.head]
         output = self.root / 'manual-profile'

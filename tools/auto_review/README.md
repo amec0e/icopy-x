@@ -39,6 +39,8 @@ to the profile. The snapshot records the profile version and selection reasons.
 Missing paths, unsupported blobs and exceeded budgets fail closed; a profile
 never silently drops context. Inspect the prepared inventory and reference hits:
 these recipes do not prove a complete dependency graph or replace reading callers.
+Offline CI checks that every profile path is still a tracked regular file, so
+renaming/removing a dependency prompts a recipe update before a live review.
 Then run `review` with the same identities/context. Download the run artifact.
 The optional `searches` input is a JSON array of literal reference terms, e.g.
 `["menu_order", "ordered_items", "main_menu.json"]`. It searches both immutable
