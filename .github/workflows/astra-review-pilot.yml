@@ -24,6 +24,11 @@ on:
         description: JSON array of additional repository paths for caller/contract context
         type: string
         default: '[]'
+      profile:
+        description: Trusted context starting point; inspect prepare output and add callers as needed
+        type: choice
+        options: [manual, ics-ui, ics-transport, accessory-menu]
+        default: manual
       searches:
         description: JSON array of literal reference terms (max 16, 128 characters each)
         type: string
@@ -58,6 +63,7 @@ jobs:
           REVIEW_BASE: ${{ inputs.base }}
           REVIEW_HEAD: ${{ inputs.head }}
           REVIEW_CONTEXT: ${{ inputs.context }}
+          REVIEW_PROFILE: ${{ inputs.profile }}
           REVIEW_SEARCHES: ${{ inputs.searches }}
           REVIEW_PURPOSE: ${{ inputs.purpose }}
         run: python -m tools.auto_review.hosted fetch
@@ -67,6 +73,7 @@ jobs:
           REVIEW_BASE: ${{ inputs.base }}
           REVIEW_HEAD: ${{ inputs.head }}
           REVIEW_CONTEXT: ${{ inputs.context }}
+          REVIEW_PROFILE: ${{ inputs.profile }}
           REVIEW_SEARCHES: ${{ inputs.searches }}
           REVIEW_PURPOSE: ${{ inputs.purpose }}
         run: python -m tools.auto_review.hosted prepare
@@ -77,6 +84,7 @@ jobs:
           REVIEW_BASE: ${{ inputs.base }}
           REVIEW_HEAD: ${{ inputs.head }}
           REVIEW_CONTEXT: ${{ inputs.context }}
+          REVIEW_PROFILE: ${{ inputs.profile }}
           REVIEW_SEARCHES: ${{ inputs.searches }}
           REVIEW_PURPOSE: ${{ inputs.purpose }}
         run: python -m tools.auto_review.hosted review
