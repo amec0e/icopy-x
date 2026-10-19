@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 from urllib.parse import urlencode
+from urllib.error import HTTPError
 from urllib.request import Request, build_opener
 
 from . import cli, profiles, report, reviewer, snapshots
@@ -154,6 +155,33 @@ def put_comment(api, record, text, comment_id=None):
     return integer(response['id'])
 
 
+def reconcile(api, current, comments):
+    """Close abandoned/stale reservations without erasing their usage ledger."""
+    for comment in comments:
+        record = marker(comment)
+        if not record or record['pr'] != current['pr'] or record['state'] != 'RESERVED':
+            continue
+        if not same(record, current):
+            final = dict(record, state='STALE')
+            text = ('**STALE** — the base/head changed before this reservation was finalized. '
+                    'Its usage remains reserved; no automatic retry will review the obsolete commits.')
+        else:
+            try:
+                old = api('GET', route('/actions/runs/' + str(record['run_id'])))
+            except HTTPError as error:
+                if error.code != 404:
+                    raise
+                old = {'status': 'completed'}
+            if old.get('status') != 'completed':
+                continue
+            final = dict(record, state='INCOMPLETE')
+            text = ('**INCOMPLETE** — the reserved run ended without publishing a result, or its '
+                    'run record is no longer available. Inspect prior evidence/usage; '
+                    'no automatic retry will incur another charge.')
+        put_comment(api, final, text, comment['id'])
+        comment['body'] = body(final, text)
+
+
 def recipes(changed):
     """Trusted starting contexts, not a claim of complete dependency discovery."""
     selected = {}
@@ -238,15 +266,10 @@ def select(api, environ, output, prepare_fn=prepare, now=None):
             continue
         current = identity(pr)
         comments = pages(api, route('/issues/' + str(current['pr']) + '/comments'))
+        reconcile(api, current, comments)
         prior = [(comment, marker(comment)) for comment in comments if marker(comment) and same(marker(comment), current)]
         previous = prior[-1] if prior else None
         if previous and previous[1]['state'] != 'DEFERRED':
-            if previous[1]['state'] == 'RESERVED':
-                old = api('GET', route('/actions/runs/' + str(previous[1]['run_id'])))
-                if old.get('status') == 'completed':
-                    record = dict(previous[1], state='INCOMPLETE')
-                    put_comment(api, record, '**INCOMPLETE** — the reserved run ended without publishing a result. '
-                                'Inspect its evidence; no automatic retry will incur another charge.', previous[0]['id'])
             continue
         record = dict(current, state='DEFERRED', reserved_at=None, run_id=run_id)
         comment_id = previous[0]['id'] if previous else None

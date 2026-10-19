@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from urllib.parse import urlsplit
+from urllib.error import HTTPError
 
 from tools.auto_review import automatic as auto, snapshots
 
@@ -41,6 +42,8 @@ class FakeGitHub:
             if path.startswith('/issues/comments/'):
                 return copy.deepcopy(next(c for c in self.comments if c['id'] == int(path.rsplit('/', 1)[1])))
             if path.startswith('/actions/runs/'):
+                if isinstance(self.old_run, Exception):
+                    raise self.old_run
                 return self.old_run
         self.writes.append((method, path, data))
         if method == 'POST' and path == '/issues/123/comments':
@@ -119,6 +122,22 @@ class AutomaticTests(unittest.TestCase):
         self.assertEqual(self.prepares, 1)
         self.assertEqual(auto.marker(self.api.comments[0])['state'], 'INCOMPLETE')
         self.assertIn('no automatic retry', self.api.comments[0]['body'])
+
+    def test_abandoned_reservation_is_finalized_after_head_changes(self):
+        self.select()
+        self.pr['head']['sha'] = 'd' * 40
+        self.bundle['gaps'] = [{'path': 'binary', 'reason': 'binary payload'}]
+        self.assertFalse(self.select())
+        self.assertEqual(auto.marker(self.api.comments[0])['state'], 'STALE')
+        self.assertIsNotNone(auto.marker(self.api.comments[0])['reserved_at'])
+        self.assertEqual(auto.marker(self.api.comments[1])['state'], 'INCOMPLETE')
+
+    def test_expired_run_record_does_not_block_queue_or_retry_generation(self):
+        self.select()
+        self.api.old_run = HTTPError('https://api.github.com/fixture', 404, 'gone', {}, None)
+        self.assertFalse(self.select())
+        self.assertEqual(auto.marker(self.api.comments[0])['state'], 'INCOMPLETE')
+        self.assertEqual(self.prepares, 1)
 
     def test_spoofed_marker_from_contributor_cannot_suppress_review(self):
         record = dict(auto.identity(self.pr), run_id=699, state='ADVISORY_COMPLETE', reserved_at=None)
