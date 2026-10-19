@@ -41,6 +41,8 @@ _PM3_PORT = '/dev/ttyACM0'
 # reusing detect_decoder's guarded handshake on the same thread.
 _detection_lock = threading.RLock()
 _active_session = None
+_failed_closes = {}
+_CLOSE_ATTEMPTS = 3
 _ICLASS_KEYS = ('AFA785A7DAB33378', '2020666666668888')
 _ANSI_ESCAPE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
 _PM3_FAILURE = re.compile(
@@ -181,17 +183,46 @@ def _is_pm3_port(port):
             os.path.realpath(port) == os.path.realpath(_PM3_PORT))
 
 
+def close_decoder(ser):
+    """Release ownership only after close succeeds; retain failed handles."""
+    global _active_session
+    with _detection_lock:
+        try:
+            ser.close()
+        except Exception:
+            attempts = _failed_closes.get(id(ser), (ser, 0))[1]
+            _failed_closes[id(ser)] = (ser, attempts + 1)
+            raise
+        _failed_closes.pop(id(ser), None)
+        if _active_session is not None and _active_session.owns(ser):
+            _active_session._ser = None
+            _active_session = None
+
+
+def _ready_for_discovery(explicit_retry=False):
+    """Worker-side cleanup survives a popped activity; never open over failure."""
+    with _detection_lock:
+        for ser, attempts in list(_failed_closes.values()):
+            if attempts >= _CLOSE_ATTEMPTS and not explicit_retry:
+                return False
+            try:
+                close_decoder(ser)
+            except Exception:
+                return False
+        return _active_session is None
+
+
 def detect_decoder(ports=None, cancelled=lambda: False, quiet=False):
     """Return an open handle only after Who/ISE; close every rejected handle.
 
     The menu supplies newly attached candidates and a cancellation predicate.
-    The activity's normal scan shares the lock so it cannot race that probe.
+    Foreground callers use DecoderSession to retain ownership after discovery.
     Serial timeouts bound each attempt; cancellation is checked between I/O.
     """
     if serial is None:
         return None
     with _detection_lock:
-        if _active_session is not None:
+        if not _ready_for_discovery():
             return None  # A foreground result/read still owns its serial handle.
         for port in decoder_ports() if ports is None else ports:
             if cancelled():
@@ -224,9 +255,9 @@ def detect_decoder(ports=None, cancelled=lambda: False, quiet=False):
             finally:
                 if not accepted:
                     try:
-                        ser.close()
+                        close_decoder(ser)
                     except Exception:
-                        pass
+                        return None  # Keep the failed-close reservation, not another open.
 
     return None
 
@@ -243,6 +274,10 @@ class DecoderSession:
         with _detection_lock:
             if self._cancelled.is_set() or self._ser is not None:
                 return None
+            # A user-initiated read can retry cleanup after the background
+            # allowance is exhausted, even if the old activity no longer exists.
+            if not _ready_for_discovery(explicit_retry=True):
+                return None
             ser = detect_decoder(cancelled=self._cancelled.is_set)
             if ser is None:
                 return None
@@ -256,20 +291,17 @@ class DecoderSession:
             return ser
 
     def cancel(self):
-        global _active_session
         self._cancelled.set()
         if self._ser is None:
             return None  # Never wait on an in-flight handshake from the UI.
         with _detection_lock:
             ser = self._ser
             if ser is not None:
-                ser.close()
-                # If close raises, retain ownership instead of reopening a
-                # possibly still-owned port. A later cancel may retry cleanup.
-                self._ser = None
-                if _active_session is self:
-                    _active_session = None
+                close_decoder(ser)
             return ser
+
+    def owns(self, ser):
+        return ser is not None and ser is self._ser
 
 
 class DecoderPresence:
@@ -297,6 +329,8 @@ class DecoderPresence:
         return result
 
     def check(self, cancelled):
+        if cancelled() or not _ready_for_discovery():
+            return False
         ports = self._snapshot()
         self._attachments = {key: value for key, value in self._attachments.items()
                              if key in ports}
@@ -317,7 +351,10 @@ class DecoderPresence:
                     present = ser is not None
                 finally:
                     if ser is not None:
-                        ser.close()
+                        try:
+                            close_decoder(ser)
+                        except Exception:
+                            return False
             if cancelled():
                 return False
             self._attachments[identity] = (present, attempts + 1)

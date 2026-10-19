@@ -364,7 +364,7 @@ def test_decode_and_details_never_start_target_poll(store, monkeypatch):
 def test_live_read_callback_stops_on_results_without_blank_poll(store, monkeypatch):
     activity = start()
     activity._state = activity.STATE_READING
-    activity._ser = object()
+    activity._ser = ScriptedSerial([])
     monkeypatch.setattr(ics_decoder, 'read_card', lambda serial: captured())
     calls = []
     monkeypatch.setattr(activity, '_start_target_poll', lambda: calls.append('poll'))
@@ -771,6 +771,7 @@ def test_old_decoder_detection_cannot_claim_restarted_read(store, monkeypatch):
     jobs[1][0](*jobs[1][1])
     assert opened == [current]
     assert not current.closed
+    activity.getCanvas().advance(50)
     assert activity._state == activity.STATE_READING
     assert activity._ser is current
     activity._on_decoder_found(None, first_generation)

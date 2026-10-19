@@ -286,6 +286,88 @@ def test_failed_close_keeps_exclusive_ownership_until_cleanup_succeeds(usb):
     assert decoder.DecoderPresence().check(lambda: False)
 
 
+@pytest.mark.parametrize('reply,cancel', [(b'NOISE\r\n', False),
+                                        (b'ISE\r\n', True),
+                                        (b'ISE\r\n', False)])
+def test_failed_probe_close_blocks_reopen_and_recovers(usb, monkeypatch, reply, cancel):
+    """Rejected, cancelled and accepted temporary handles share cleanup."""
+    original_open = decoder._open_serial
+    fail_close = [True]
+    overlaps = []
+
+    def open_port(path):
+        if any(not handle.closed for handle in usb.handles):
+            overlaps.append(path)
+        handle = original_open(path)
+        close = handle.close
+
+        def guarded_close():
+            if fail_close[0]:
+                raise OSError('close failed')
+            close()
+
+        handle.close = guarded_close
+        return handle
+
+    monkeypatch.setattr(decoder, '_open_serial', open_port)
+
+    def response():
+        usb.cancel = cancel
+        return reply
+
+    usb.ports['/dev/ttyACM1'] = {'reply': response}
+    presence = decoder.DecoderPresence()
+    try:
+        assert not presence.check(lambda: usb.cancel)
+        assert not usb.handles[0].closed
+        usb.cancel = False
+        assert not presence.check(lambda: False)
+        assert len(usb.opened) == 1
+        fail_close[0] = False
+        usb.ports['/dev/ttyACM1']['reply'] = b'ISE\r\n'
+        assert presence.check(lambda: False)
+        assert len(usb.opened) == 2
+        assert all(handle.closed for handle in usb.handles)
+        assert overlaps == []
+    finally:
+        fail_close[0] = False
+        for handle in usb.handles:
+            decoder.close_decoder(handle)
+
+
+def test_permanent_close_failure_is_bounded_until_explicit_read_retry(usb):
+    usb.ports['/dev/ttyACM1'] = {'reply': b'ISE\r\n'}
+    session = decoder.DecoderSession()
+    handle = session.detect()
+    close = handle.close
+    calls = []
+
+    def fail():
+        calls.append(True)
+        raise OSError('close failed')
+
+    handle.close = fail
+    replacement = decoder.DecoderSession()
+    try:
+        with pytest.raises(OSError):
+            session.cancel()
+        presence = decoder.DecoderPresence()
+        for _ in range(10):
+            assert not presence.check(lambda: False)
+        assert len(calls) == 3
+        assert len(usb.opened) == 1
+        handle.close = close
+        assert not presence.check(lambda: False)  # Automatic allowance exhausted.
+        assert not handle.closed
+        assert replacement.detect() is usb.handles[1]
+        assert handle.closed
+        assert not usb.handles[1].closed
+    finally:
+        handle.close = close
+        decoder.close_decoder(handle)
+        replacement.cancel()
+
+
 @pytest.mark.parametrize('enumeration', [None, lambda: [],
     lambda: (_ for _ in ()).throw(OSError('enumeration unavailable'))])
 def test_windows_enumeration_failure_never_guesses_ports(usb, monkeypatch, enumeration):
