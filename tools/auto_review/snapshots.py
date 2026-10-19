@@ -114,6 +114,10 @@ def collect(repo, base, head, context=(), max_bytes=2_000_000, max_file_bytes=1_
             except UnicodeError:
                 bundle['gaps'].append(dict(path=path, side=side, reason='binary/non-UTF-8 blob'))
                 continue
+            if text.startswith(('version https://git-lfs.github.com/spec/v1\n',
+                                'version https://hawser.github.com/spec/v1\n')):
+                bundle['gaps'].append(dict(path=path, side=side, reason='Git LFS payload unavailable'))
+                continue
             blob.update(text=text, sha256=hashlib.sha256(raw).hexdigest())
         bundle['files'].append(row)
     # JSON escaping and metadata also count. Never silently truncate content.

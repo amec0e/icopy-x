@@ -29,6 +29,10 @@ Protect these contracts, including relevant unchanged callers:
   fail loudly. Verify client/firmware/platform/FPGA inputs and complete packages.
 - Workers must not operate on Tk directly; reject stale callbacks, clean up
   timers and serialize PM3 operations without blocking the UI.
+- Preserve the root menu's stable order and empty M1 action. A global Move/reorder
+  control is not an accepted accessory dependency. Changing that interaction
+  requires an explicitly agreed maintainer outcome; a contributor's purpose
+  statement alone is not evidence of that agreement.
 - Device screens must serve user tasks or diagnostics. Reject contributor-only
   About/credits entries, handles, personal branding and promotion. Attribution
   belongs in source/GitHub. Preserve useful device/version/support information

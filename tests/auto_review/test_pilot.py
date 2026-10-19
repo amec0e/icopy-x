@@ -86,6 +86,14 @@ class PilotTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'include base'):
             snapshots.collect(self.repo, newer, self.head)
 
+    def test_lfs_pointer_is_a_payload_gap_not_reviewed_source(self):
+        self.write('asset', 'version https://git-lfs.github.com/spec/v1\n'
+                   'oid sha256:' + '0' * 64 + '\nsize 12345\n')
+        self.head = self.commit()
+        bundle = self.bundle()
+        self.assertIn('Git LFS payload unavailable', [g['reason'] for g in bundle['gaps']])
+        self.assertNotIn('text', next(row for row in bundle['files'] if row['path'] == 'asset')['head'])
+
     def test_deleted_file_has_base_evidence(self):
         (self.repo / 'feature.py').unlink()
         self.head = self.commit()
@@ -176,6 +184,14 @@ class PilotTests(unittest.TestCase):
         self.assertEqual(len(report['calls']), 2)
         self.assertEqual(report['calls'][1]['usage']['output_tokens'], 10)
         self.assertIsNotNone(report['review'])
+
+    def test_http_failure_preserves_only_status_not_response_body(self):
+        def send(*args):
+            raise reviewer.APIError(429)
+        report = reviewer.review(self.bundle(), 'policy', 'fixture-key', request_fn=send)
+        self.assertEqual(report['status'], 'INCOMPLETE')
+        self.assertEqual(report['http_status'], 429)
+        self.assertNotIn('fixture-key', json.dumps(report))
 
     def test_malformed_response_is_refused(self):
         for response in ([], dict(status='completed', output=[None], model=reviewer.MODEL),

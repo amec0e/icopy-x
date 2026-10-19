@@ -21,6 +21,12 @@ class NoRedirect(HTTPRedirectHandler):
         raise ValueError('API redirect refused')
 
 
+class APIError(ValueError):
+    def __init__(self, status):
+        self.status = int(status)
+        super().__init__('OpenAI HTTP status ' + str(self.status))
+
+
 def send(request, key, timeout):
     outgoing = Request('https://api.openai.com/v1/responses', data=canonical(request),
         headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'}, method='POST')
@@ -28,7 +34,7 @@ def send(request, key, timeout):
         with build_opener(NoRedirect).open(outgoing, timeout=timeout) as response:
             raw = response.read(2_000_001)
     except HTTPError as error:
-        raise ValueError('OpenAI API HTTP status ' + str(error.code)) from None
+        raise APIError(error.code) from None
     if len(raw) > 2_000_000:
         raise ValueError('API output exceeds limit')
     return json.loads(raw)
@@ -111,13 +117,18 @@ def review(bundle, policy, key, request_fn=send, max_output_tokens=6000, timeout
             input=[dict(role='user', content=json.dumps(dict(snapshot=bundle, prior=previous), ensure_ascii=True))],
             text={'format': dict(type='json_schema', name='icopy_review', strict=True, schema=SCHEMA)})
         try:
+            started = time.monotonic()
             response = request_fn(request, key, min(timeout, remaining))
-            report['calls'].append(metadata(response, task))
+            call = metadata(response, task)
+            call['elapsed_seconds'] = round(time.monotonic() - started, 3)
+            report['calls'].append(call)
             previous = validate(result(response), bundle)
         except (ValueError, OSError, TimeoutError) as error:
             # Keep completed call accounting and the last validated proposal, but
             # never promote a partial review or retry a potentially billed call.
             report.update(error=type(error).__name__, failed_pass=task, review=previous)
+            if isinstance(error, APIError):
+                report['http_status'] = error.status
             return report
     report.update(review=previous, status='ADVISORY_COMPLETE' if previous['completion'] == 'complete' else 'INCOMPLETE')
     return report

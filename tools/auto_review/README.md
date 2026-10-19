@@ -44,7 +44,7 @@ instruction; maintainer evaluation remains necessary.
 `PREPARED` means evidence was collected. `ADVISORY_COMPLETE` means all three
 responses passed structural, coverage and source-line checks and the final model
 response declared its review complete. It does **not** mean no defects, tests
-passed, or merge approval. `INCOMPLETE` exits nonzero. Binary blobs, symlinks,
+passed, or merge approval. `INCOMPLETE` exits nonzero. Binary blobs, LFS pointers, symlinks,
 unsupported modes and exceeded content budgets are explicit gaps; a snapshot
 with any gap makes no API call. Refusals, malformed responses, missing/duplicate
 file coverage, fabricated source quotes, model substitution and truncation fail
