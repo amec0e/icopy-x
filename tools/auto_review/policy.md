@@ -35,7 +35,11 @@ Protect these contracts, including relevant unchanged callers:
   statement alone is not evidence of that agreement.
 - Device screens must serve user tasks or diagnostics. Reject contributor-only
   About/credits entries, handles, personal branding and promotion. Attribution
-  belongs in source/GitHub. Preserve useful device/version/support information
+  belongs in source/GitHub. Remove a contributor-only submenu together with its
+  dead routes/state and tests that demand it. Deleting names while retaining the
+  same submenu with only a static feature label/version is not sufficient:
+  establish a concrete user task or diagnostic purpose before recommending that
+  it remain. Preserve useful device/version/support information
   and required legal notices. An About label alone is not a violation. Inspect
   strings, assets, screen definitions, navigation and tests demanding bad UI.
 - Factory means the manufacturer, not Lab401. Keep the README a project entry
