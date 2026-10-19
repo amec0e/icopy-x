@@ -53,8 +53,11 @@ Missing worker output produces an explicit incomplete result, not an empty pass.
 
 The current open-PR list is the queue. This recovers after a delayed/dropped
 schedule event and naturally coalesces pushes to the latest head. Drafts are
-skipped. A shared concurrency group serializes the automatic workflow and manual
-pilot; cancelling a pending schedule does not delete the PR from the next scan.
+skipped. A dedicated concurrency group serializes automatic reservations and
+reviews; cancelling a pending schedule does not delete the PR from the next scan.
+The manual pilot has a separate group so schedule ticks cannot evict a pending
+maintainer dispatch. A deliberately dispatched manual review can therefore run
+concurrently and incur additional usage outside the automatic allowance.
 
 Bot-owned comments contain a versioned reservation marker. The selector ignores
 markers posted by contributors. A reservation is written before the model job

@@ -16,8 +16,9 @@ permissions:
   contents: read
 
 concurrency:
-  # Shared with the manual pilot. Reservation and generation stay serialized.
-  group: astra-advisory-pilot
+  # Serialize automatic reservations/generations. A scheduled tick must never
+  # replace a maintainer's pending manual pilot in GitHub's concurrency queue.
+  group: astra-automatic-pr-review
   cancel-in-progress: false
 
 jobs:
