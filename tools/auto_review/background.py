@@ -66,6 +66,11 @@ def run(request, key, timeout, attempt, deadline, send, capture, checkpoint=None
             except BaseException:
                 record['outcome'] = 'not_sent'
                 raise
+        else:
+            try:
+                save()
+            except CheckpointError:
+                pass
         started = time.monotonic()
         try:
             result = send(payload, key, limit, attempt=record,
@@ -95,6 +100,7 @@ def run(request, key, timeout, attempt, deadline, send, capture, checkpoint=None
             raise ValidationError('response_status')
         terminal = status in TERMINAL
         attempt['response_status'] = status
+        attempt['http_requests'][-1].update(response_id=known_id, response_status=status)
         attempt['cleanup'] = {'outcome': 'not_needed' if terminal else 'pending'}
         if terminal:
             attempt['terminal_response'] = capture(value)

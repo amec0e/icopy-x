@@ -67,6 +67,8 @@ class BackgroundTests(unittest.TestCase):
         self.assertEqual(self.attempt['terminal_response']['usage']['input_tokens'], 123)
         ids = [record['client_request_id'] for record in self.attempt['http_requests']]
         self.assertEqual(len(set(ids)), 3)
+        self.assertEqual([record['response_status'] for record in self.attempt['http_requests']],
+                         ['queued', 'in_progress', 'completed'])
         self.assertNotIn('fixture-key', json.dumps(self.saved))
 
     def test_generation_can_exceed_old_120_second_wait_within_total_budget(self):
@@ -163,8 +165,11 @@ class BackgroundTests(unittest.TestCase):
 
     def test_checkpoint_failure_after_ack_does_not_prevent_cancellation(self):
         sender = MagicMock(side_effect=[self.response(), self.response('cancelled')])
+        def broken_disk_after_submit():
+            if len(self.saved) > 1:
+                raise OSError()
         with self.assertRaises(background.CheckpointError):
-            self.run_response(sender, checkpoint=MagicMock(side_effect=[None, OSError(), OSError(), OSError(), OSError()]))
+            self.run_response(sender, checkpoint=broken_disk_after_submit)
         self.assertEqual(self.operations(sender), ['submit', 'cancel'])
         self.assertEqual(self.attempt['response_status'], 'cancelled')
 
