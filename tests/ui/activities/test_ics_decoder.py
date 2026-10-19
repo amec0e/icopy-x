@@ -477,10 +477,12 @@ def test_landing_highlight_follows_all_rows_on_layered_canvas(store):
     actstack._canvas_factory = lambda: LayerCanvas()
     activity = start()
     canvas = activity.getCanvas()
-    for target in (0, 1, 2, 3, 0):
+    assert activity._menu._items == ['Read Credential', 'Saved Credentials', 'Back']
+    assert activity._menu_actions == ['read', 'saved', 'back']
+    for target in (0, 1, 2, 0):
         if target:
             activity.onKeyEvent(KEY_DOWN)
-        elif activity._menu.selection() == 3:
+        elif activity._menu.selection() == 2:
             activity.onKeyEvent(KEY_DOWN)
         assert activity._menu.selection() == target
         background = canvas.find_withtag('_ics_bg_clear')[0]
@@ -492,44 +494,7 @@ def test_landing_highlight_follows_all_rows_on_layered_canvas(store):
         for row, item in enumerate(texts):
             assert canvas.itemcget(item, 'fill') == 'black'
     activity.onKeyEvent(KEY_UP)
-    assert activity._menu.selection() == 3
-
-
-def test_about_text_scrolls_vertically_and_horizontally_and_back_returns_home(store):
-    actstack._canvas_factory = lambda: MeasuredCanvas()
-    activity = start()
-    activity._show_about()
-    assert activity._info_view._lines == [
-        'iCS Decoder v1.1',
-        'iCLASS SE/SEOS credential decoder',
-        'Contributors:',
-        '@Dysonian',
-        '@PhantomPlanet',
-    ]
-    view = activity._info_view
-    assert view._lines.index('Contributors:') == view._lines.index('iCLASS SE/SEOS credential decoder') + 1
-    assert '@PhantomPlanet' in view._lines[:view._max_visible]
-    assert not any('Original iCS Decoder' in line or 'Nikola' in line or '56-bit supported' in line
-                   for line in view._lines)
-    assert_all_info_scroll_positions(activity)
-    view._scroll_offset = 0
-    view._redraw()
-    for _ in range(20):
-        activity.onKeyEvent(KEY_DOWN)
-    assert view._scroll_offset == max(0, len(view._lines) - view._max_visible)
-    assert view._lines[-1] in view._lines[view._scroll_offset:view._scroll_offset + view._max_visible]
-    for _ in range(20):
-        activity.onKeyEvent(KEY_RIGHT)
-    assert view._h_offset == view._get_max_h_offset()
-    for _ in range(20):
-        activity.onKeyEvent(KEY_LEFT)
-    assert view._h_offset == 0
-    for _ in range(20):
-        activity.onKeyEvent(KEY_UP)
-    assert view._scroll_offset == 0
-    activity.onKeyEvent(KEY_M1)
-    assert activity._state == activity.STATE_HOME
-    assert activity._info_view is None
+    assert activity._menu.selection() == 2
 
 
 def test_long_details_scroll_both_directions_without_changing_capture(store):
@@ -568,7 +533,7 @@ def test_long_details_scroll_both_directions_without_changing_capture(store):
 
 def test_short_information_does_not_scroll_and_result_menu_still_selects(store):
     activity = start()
-    activity._show_info(activity.STATE_ABOUT, 'About', ['Short'])
+    activity._show_info(activity.STATE_DETAILS, 'Credential Details', ['Short'])
     for key in (KEY_DOWN, KEY_UP, KEY_RIGHT, KEY_LEFT):
         activity.onKeyEvent(key)
     assert activity._info_view._scroll_offset == 0

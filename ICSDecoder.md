@@ -37,7 +37,8 @@ infer them from an arbitrary SEOS payload or raw legacy block.
 
 ## Using the accessory
 
-1. Connect the accessory by USB and open **ICS Decoder** from the main menu.
+1. Connect the accessory by USB. **ICS Decoder** appears in the main menu
+   after it answers the identity handshake; open that entry.
 2. Choose **Read Credential** and place the source card on the accessory.
 3. At **Credential Result**, inspect the fields, view the original response,
    or save the capture with a name.
@@ -72,6 +73,28 @@ On the iCopy-XS, `/dev/ttyACM0` is reserved for the internal PM3 and is
 excluded from accessory probing. The integration does not reassign the
 PM3 port. USB enumeration with the accessory connected before boot,
 hot-plugging, disconnects and PC-mode transitions needs device testing.
+
+The main menu starts with the accessory entry hidden. While the menu is
+active, a background worker checks attached serial devices approximately
+once a second. Only an exact `ISE` reply to `Who` makes the entry visible;
+a serial port or USB bridge ID alone is insufficient. Discovery excludes
+the internal PM3 path and aliases resolving to it. Windows discovery uses
+the enumerated inventory and never guesses COM port numbers.
+
+A verified attachment is cached until its device node disappears or changes.
+An unresponsive attachment gets at most three probes, allowing for firmware
+startup; unplug/replug to retry after that. Temporary discovery handles are
+closed, polling stops while a child activity is open, and late results cannot
+update a paused menu. Adding/removing the entry preserves the selected action
+where it remains available. Detection is bounded by serial timeouts and is
+not an instantaneous disconnect notification.
+
+There is no verified USB VID/PID list covering the original accessory and all
+DIY builds. Discovery therefore retains the existing external ACM/USB serial
+candidate scope on Linux and USB serial scope on macOS; it can send `Who`
+to another external serial device. The proposed IDs in issue #60 do not
+establish accessory identity. A stricter candidate allowlist needs genuine
+accessory descriptors and hardware testing before it can replace this policy.
 
 Detection and source reading run in background threads. Stale source-read
 callbacks are rejected when the user exits or restarts reading, and the

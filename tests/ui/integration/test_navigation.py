@@ -197,13 +197,13 @@ class TestFullStackBoot:
         texts = canvas.get_all_text()
         assert "Main Page" in texts
 
-        # Current core menu includes ICS Decoder and Settings.
+        # ICS Decoder is hidden until a connected accessory is verified.
         assert main_activity.lv_main_page is not None
         assert main_activity.lv_main_page._items == [
             'Auto Copy', 'Dump Files', 'Scan Tag', 'Read Tag', 'Sniff TRF',
             'Simulation', 'PC-Mode', 'Diagnosis', 'Backlight', 'Volume',
             'About', 'Erase Tag', 'Time Settings', 'LUA Script',
-            'ICS Decoder', 'Settings',
+            'Settings',
         ]
 
         # Main menu has no M2 button label (setRightButton(""))

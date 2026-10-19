@@ -55,6 +55,7 @@ import config
 config._CONF_PATH = str(app / 'data' / 'conf.ini')
 import actstack
 import actmain
+import activity_main
 from _constants import KEY_DOWN, KEY_OK, KEY_PWR
 root = tkinter.Tk()
 root.geometry('240x240')
@@ -78,7 +79,10 @@ try:
     assert any(text.startswith('Main Page') for text in main_text), main_text
     items = main._menu_items
     actions = [item[2] for item in items]
-    assert all(action in actions for action in ('scan', 'read_list', 'iclass_se'))
+    assert all(action in actions for action in ('scan', 'read_list'))
+    # An accessory can be registered without being visible when disconnected.
+    # Keep the feature/import assertion; presence belongs to discovery tests.
+    assert main._getActivityClass('iclass_se') is activity_main.ICSDecoderActivity
     # Normal activity key dispatch: enter Read Tag's type list, then return.
     for _ in range(actions.index('read_list')):
         main.callKeyEvent(KEY_DOWN)
@@ -106,7 +110,8 @@ try:
         finally:
             sys.path.pop(0)
         harness_paths.update(harness.parent / name for name in
-                             ('critical_flows.py', 'strict_transport.py', 'ultralight_cases.py', 'recovery_transport.py'))
+                             ('critical_flows.py', 'strict_transport.py', 'ultralight_cases.py',
+                              'recovery_transport.py', 'decoder_menu_case.py'))
         critical = critical_flows.run(root, output, variant, errors)
 finally:
     root.destroy()

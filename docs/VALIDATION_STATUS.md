@@ -13,11 +13,18 @@ Required build failures prevent QEMU success. No physical device or private
 factory image is needed on a contributor's computer.
 
 The trusted QEMU harness runs the exact built flash and no-flash IPKs under ARM
-Python 3.8.0 and Tcl/Tk 8.6.5. Its `critical-v5` profile has 22 cases per variant,
-44 combinations. It exercises packaged application code, real Tk/threads,
+Python 3.8.0 and Tcl/Tk 8.6.5. Its `critical-v6` profile has 23 cases per variant,
+46 combinations. It exercises packaged application code, real Tk/threads,
 translation/parsing, Reader behavior, cancellation and selected transport faults.
 PM3 responses and hardware boundaries are controlled fixtures. It does not run
 the physical PM3, boot the device kernel or prove RF/USB/flashing behavior.
+
+The expanded profile passed on main after [#83](https://github.com/lab-401/icopy-x/pull/83)
+in [run 39236635642](https://github.com/lab-401/icopy-x/actions/runs/39236635642).
+It now checks decoder menu appearance/removal with controlled serial identities,
+including isolation of the internal PM3. The subsequent contributor About removal
+[#85](https://github.com/lab-401/icopy-x/pull/85) passed the same 23 cases per IPK
+in [run 39236856190](https://github.com/lab-401/icopy-x/actions/runs/39236856190).
 
 These tests have caught application defects. In [run 39169035713](https://github.com/lab-401/icopy-x/actions/runs/39169035713),
 both profiles rejected a late Auto Copy animation after its canvas was destroyed.
@@ -35,19 +42,20 @@ smallest useful host regression; maintainers own shared QEMU fixtures and pins.
 
 | Area | Implemented evidence/control | Still required |
 | --- | --- | --- |
-| PM3 build integrity | [#65](https://github.com/lab-401/icopy-x/pull/65): one source revision, required patches fail closed, client/fullimage/FPGA identity checks | Physical client/firmware acceptance. FPGA bitstreams are verified upstream inputs, not newly synthesized HDL. |
+| PM3 build integrity | [#65](https://github.com/lab-401/icopy-x/pull/65): matching source/platform/FPGA checks; one physical Iceman client/device version/status pair passed on 19 October | Not full firmware readback or flashing acceptance. FPGA bitstreams are verified upstream inputs, not newly synthesized HDL. |
 | Ultralight dumps | [#66](https://github.com/lab-401/icopy-x/pull/66): header, UID, length/capacity and partial-data assertions on host/QEMU | Retest the supplied compatible tag; genuine Ultralight/NTAG coverage is separate. An earlier intermittent empty reply remains unexplained. |
-| Timeout/cancellation | [#67](https://github.com/lab-401/icopy-x/pull/67): bounded drain, explicit daemon synchronization, no implicit replay; real host TCP and synthetic QEMU faults | Charged-device LF search/read cancellation and successful reuse; hardware abort timing. |
-| Auto Copy exit | [#70](https://github.com/lab-401/icopy-x/pull/70): timer disposal and destroyed-activity callback guards | Representative physical read/exit/re-entry acceptance. |
-| Maintainer station | [#68](https://github.com/lab-401/icopy-x/pull/68): pinned SSH, snapshots, guarded buttons, exact reference dumps, cancellation/re-entry and durable USB handover | First supervised acceptance of the maintained controller; enroll USB identity, UI strings and client output. |
+| Timeout/cancellation | [#67](https://github.com/lab-401/icopy-x/pull/67): bounded drain and no implicit replay; six supplemental physical Classic cancellation/re-read cases passed | Maintained cancellation command has a progress-label guard race; LF recovery and broader hardware abort timing remain pending. |
+| Auto Copy exit | [#70](https://github.com/lab-401/icopy-x/pull/70): timer/callback guards; physical Classic Auto Copy read, exit and re-entry passed on the recorded candidate | Other card families and changed application versions require applicable acceptance. |
+| Maintainer station | [#68](https://github.com/lab-401/icopy-x/pull/68): maintained Classic reference read and one complete Windows PC-mode round trip passed | Repair/retest maintained cancellation guard. PC-mode evidence does not cover other hosts, endurance or mass-storage transfers. |
 | Releases | [#69](https://github.com/lab-401/icopy-x/pull/69): complete candidate archives; publication requires exact build/QEMU/host evidence and asset hashes | Maintainer release decision and change-specific physical evidence. A passing release gate is not hardware certification. |
-| ICS Decoder | Host protocol regressions and QEMU accessory-absent flow | Accessory unavailable: actual discovery, capture, disconnect and write/readback remain blocked. |
+| ICS Decoder | Host protocol/ownership regressions and QEMU absent/hotplug flows; #82 removes Move, #83 gates presence, #85 removes contributor About | Latest menu changes need device smoke checks. Accessory unavailable: genuine discovery, capture, disconnect and write/readback remain blocked. |
 | Factory/no-flash | Separate package/Lua/client family and QEMU command fixtures | Real factory-firmware device acceptance; the current physical device does not establish it. |
 | Installation/flashing | Package/build checks and earlier reversible staging observations | Standard update/restart/recovery and fullimage flashing on stable power. Not covered by read or PC-mode passes. |
 
-Earlier experimental sessions read ordinary Classic 1K, EM410x and one
-USCUID-UL-compatible tag. Those observations informed regressions; they do not
-certify the later runtime changes. No physical test is performed automatically
+The [19 October physical acceptance record](PHYSICAL_ACCEPTANCE_20261019.md)
+identifies the tested application, successful Classic and PC-mode cases, and the
+failed harness attempts. Earlier EM410x and USCUID-UL-compatible observations
+informed regressions; they do not certify later runtime changes. No physical test is performed automatically
 on a public PR runner. No source badge writes are part of the read cases.
 
 The physical station operates a reviewed, already installed application. It is
@@ -55,22 +63,18 @@ not an installer, a full filesystem attestation or a wire-level RF analyzer.
 UI-phase cancellation is distinguished from precise PM3 command timing. Missing
 hardware and an interrupted session remain explicit gaps, never implicit passes.
 
-## Next supervised session
+## Next physical acceptance work
 
-1. Charge the iCopy-XS and connect its Ethernet hub. Inspect actual installed
-   software before choosing an exact reviewed candidate; preserve a verified
-   baseline and keep installation/staging separate from the station's tests.
-2. Enroll the private machine/profile and Classic 1K reference fixture. Calibrate
-   visible text and framebuffer capture; perform one ordinary read.
-3. Enter PC mode, replace the hub with a direct USB cable, identify the new port,
-   and run the matching hash-pinned host client's `hw version` and `hw status`.
-   The serial port speaks PM3 protocol, not a Linux shell. Reject FPGA or client/
-   firmware mismatch output even if the command exits zero.
-4. Exit PC mode physically, restore the hub, collect logs and perform another
-   known-card read. Both USB probes and this return read are required for PASS.
-5. If power and time permit, test EM410x timeout/cancel recovery and the supplied
-   Ultralight-compatible tag. Record the exact application and firmware for each
-   result. Do not flash merely to accumulate test coverage.
+1. With a charged device and Ethernet hub, verify installed identities and stage
+   the reviewed menu candidate with a rollback. Confirm Move is gone and ICS is
+   hidden without the accessory; perform a known Classic read and exit/re-entry.
+2. After correcting the maintained cancellation guard, repeat its cancel-read
+   operation against the enrolled Classic reference. Preserve unsuccessful cases.
+3. Retest EM410x recovery and the supplied Ultralight-compatible tag when present.
+4. Schedule factory/no-flash, real ICS and standard installation/flashing checks
+   separately with appropriate hardware and stable power. Do not flash merely to
+   accumulate coverage. The completed PC-mode round trip need not be repeated for
+   menu-only changes; changed USB/PC behavior requires relevant new evidence.
 
 Follow [PHYSICAL_TESTING.md](PHYSICAL_TESTING.md) for commands and interruption
 recovery. Raw UID/dump/log evidence stays outside Git.
