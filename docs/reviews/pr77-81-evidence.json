@@ -1,0 +1,110 @@
+{
+  "compared_main": "f07c2035c3fcbbd356deb6e33b64483068c80865",
+  "encoded_source": [
+    {
+      "path": "src/middleware/iclasswrite.py",
+      "raw_bytes": 17332,
+      "raw_parse": "parses; inspect runtime semantics",
+      "base64_valid": true,
+      "decoded_parses": true,
+      "decoded_matches_81": true,
+      "decoded_vs_81_diff_lines": 0
+    },
+    {
+      "path": "src/middleware/ics_decoder.py",
+      "raw_bytes": 38140,
+      "raw_parse": "SyntaxError: cannot assign to expression at line 1",
+      "base64_valid": true,
+      "decoded_parses": true,
+      "decoded_matches_81": true,
+      "decoded_vs_81_diff_lines": 0
+    },
+    {
+      "path": "tests/ui/activities/test_ics_fixes.py",
+      "raw_bytes": 11804,
+      "raw_parse": "SyntaxError: invalid decimal literal at line 1",
+      "base64_valid": true,
+      "decoded_parses": true,
+      "decoded_matches_81": true,
+      "decoded_vs_81_diff_lines": 0
+    }
+  ],
+  "counterexamples": {
+    "encoded_iclasswrite_ast": {
+      "statements": 1,
+      "expression": "BinOp",
+      "definitions": 0,
+      "undefined_identifiers": 3
+    },
+    "regex_false_success": {
+      "Write unsuccessful": true,
+      "Write NOT SUCCESSFUL": true,
+      "Wrote block 7 failed": false
+    },
+    "linux_no_known_vid": {
+      "opened": [
+        "/dev/ttyACM0",
+        "/dev/ttyACM1"
+      ],
+      "writes": [
+        [
+          "/dev/ttyACM0",
+          "Who\r\n"
+        ],
+        [
+          "/dev/ttyACM1",
+          "Who\r\n"
+        ]
+      ],
+      "all_closed": true
+    },
+    "windows_no_known_vid": {
+      "open_count": 256,
+      "first": "COM1",
+      "last": "COM256",
+      "all_closed": true
+    },
+    "block7": {
+      "before": {
+        "raw": "0011223344556677",
+        "normalized": "0011223344556677",
+        "logs": []
+      },
+      "candidate": {
+        "raw": "0011223344556677",
+        "normalized": "0011223344556677",
+        "logs": [
+          "Key#: 0011223344556677"
+        ]
+      },
+      "invalid_candidate": {
+        "normalized": null,
+        "logs": [
+          "Key#: NOT-A-KEY"
+        ]
+      },
+      "current": {
+        "raw": "0011223344556677",
+        "normalized": "0011223344556677",
+        "logs": []
+      }
+    }
+  },
+  "full_tree_reviewer_preflight": {
+    "status": "INCOMPLETE",
+    "reason": "Changed-file inventory exceeds pilot limit; split the review",
+    "api_calls": 0
+  },
+  "build": {
+    "entries": 468,
+    "identical_renames": 463,
+    "newline_only_renames": 1,
+    "deleted_factory_inputs": 2,
+    "added_iceman_outputs": 2
+  },
+  "tests": {
+    "local_python": "3.14.6",
+    "passed": 466,
+    "physical_accessory_tested": false
+  }
+}
