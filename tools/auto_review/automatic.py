@@ -165,6 +165,14 @@ def recipes(changed):
     if any(p.startswith(('build/', 'tools/build', '.github/workflows/build', 'tests/build/')) for p in changed):
         add(['tools/build_ipk.py', '.github/workflows/build-ipk.yml',
              'tests/test_build_ipk_contracts.py'], 'Factory/flash package boundary.')
+    if any(p == 'CONTRIBUTING.md' or p.startswith(('tools/auto_review/', 'tests/auto_review/',
+                                                 '.github/workflows/astra-')) for p in changed):
+        add(['tools/auto_review/' + name for name in ('automatic.py', 'hosted.py', 'cli.py',
+             'snapshots.py', 'reviewer.py', 'background.py', 'contract.py', 'report.py',
+             'profiles.py', 'policy.md')], 'Reviewer trust, output and source-coverage contracts.')
+        add(['.github/workflows/astra-pr-review.yml', '.github/workflows/astra-review-pilot.yml',
+             '.github/workflows/test-host.yml', '.github/workflows/qemu-critical.yml'],
+            'Actual automation and contributor CI boundaries.')
     return selected
 
 

@@ -76,6 +76,8 @@ workflow artifact and reservation link remain available.
 
 The collector includes every changed file plus trusted starting contexts for
 accessory lifecycle, command translation/ownership, UI and package changes.
+Reviewer and contribution-guideline changes also receive the engine and actual
+CI workflows so their claims can be checked against implementation.
 These recipes are maintained in `automatic.py`; they are not a complete dynamic
 call graph. Missing dependencies must remain explicit limitations. Binary,
 missing or oversized evidence and stale branches receive a no-API explanation.

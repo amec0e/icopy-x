@@ -231,11 +231,13 @@ class AutomaticTests(unittest.TestCase):
 
     def test_context_recipes_refer_to_real_tracked_sources(self):
         paths = auto.recipes(['src/middleware/ics_decoder.py', 'src/lib/activity_main.py',
-                              'src/middleware/iclasswrite.py', 'tools/build_ipk.py'])
+                              'src/middleware/iclasswrite.py', 'tools/build_ipk.py', 'CONTRIBUTING.md'])
         tracked = set(subprocess.check_output(['git', 'ls-files']).decode().splitlines())
         self.assertFalse(set(paths) - tracked)
         self.assertIn('src/main/rftask.py', paths)
         self.assertIn('tests/ui/activities/test_ics_decoder.py', paths)
+        self.assertIn('tools/auto_review/reviewer.py', paths)
+        self.assertIn('.github/workflows/astra-pr-review.yml', paths)
 
     def test_preparation_reads_candidate_blobs_without_executing_them(self):
         root = Path(self.temp.name) / 'repo'; root.mkdir()
