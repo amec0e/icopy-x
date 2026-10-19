@@ -1,5 +1,6 @@
 """Exercise actual enumeration/Who discovery with fake USB and serial I/O."""
 import os
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -112,6 +113,41 @@ def test_unplug_during_handshake_does_not_publish_stale_presence(usb):
     usb.ports['/dev/ttyACM1'] = {'reply': reply}
     assert not decoder.DecoderPresence().check(lambda: False)
     assert usb.handles[0].closed
+
+
+def test_menu_probe_releases_port_before_activity_can_open_it(usb):
+    entered, release = threading.Event(), threading.Event()
+    calls = []
+
+    def reply():
+        calls.append(True)
+        if len(calls) == 1:
+            entered.set()
+            assert release.wait(3)
+        return b'ISE\r\n'
+
+    usb.ports['/dev/ttyACM1'] = {'reply': reply}
+    results, activity_handles = [], []
+    presence = decoder.DecoderPresence()
+    worker = threading.Thread(target=lambda: results.append(presence.check(lambda: usb.cancel)))
+    activity = threading.Thread(target=lambda: activity_handles.append(decoder.detect_decoder()))
+    try:
+        worker.start()
+        assert entered.wait(3)
+        usb.cancel = True  # leaving the menu to open the decoder activity
+        activity.start()
+        assert len(usb.handles) == 1
+    finally:
+        release.set()
+        worker.join(3)
+        if activity.ident is not None:
+            activity.join(3)
+    assert not worker.is_alive() and not activity.is_alive()
+    assert results == [False]
+    assert usb.handles[0].closed
+    assert activity_handles == [usb.handles[1]]
+    assert not activity_handles[0].closed  # reading activity owns this handle
+    activity_handles[0].close()
 
 
 @pytest.mark.parametrize('enumeration', [None, lambda: [],
