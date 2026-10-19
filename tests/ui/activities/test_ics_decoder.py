@@ -61,6 +61,8 @@ def activity_stack():
     actstack._reset()
     actstack._canvas_factory = lambda: MockCanvas()
     yield
+    for activity in list(actstack._ACTIVITY_STACK):
+        activity.onDestroy()
     actstack._reset()
 
 
@@ -754,14 +756,20 @@ def test_old_decoder_detection_cannot_claim_restarted_read(store, monkeypatch):
     activity._start_read()
     assert activity._read_generation != first_generation
     assert activity._state == activity.STATE_DETECTING
-    stale, current = Port(), Port()
-    ports = iter([stale, current])
-    monkeypatch.setattr(ics_decoder, 'detect_decoder', lambda: next(ports))
+    current = Port()
+    opened = []
+
+    def detect(**kwargs):
+        opened.append(current)
+        return current
+
+    monkeypatch.setattr(ics_decoder, 'detect_decoder', detect)
     jobs[0][0](*jobs[0][1])
-    assert stale.closed
+    assert opened == []  # cancelled before discovery; never open a stale session
     assert activity._state == activity.STATE_DETECTING
     assert activity._ser is None
     jobs[1][0](*jobs[1][1])
+    assert opened == [current]
     assert not current.closed
     assert activity._state == activity.STATE_READING
     assert activity._ser is current

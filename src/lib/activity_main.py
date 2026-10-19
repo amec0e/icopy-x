@@ -8241,6 +8241,7 @@ class IClassSEActivity(BaseActivity):
 
     def __init__(self, bundle=None):
         self._ser = None
+        self._decoder_session = None
         self._state = self.STATE_READING
         self._poll_timer = None
         self._target_poll_timer = None
@@ -8272,7 +8273,10 @@ class IClassSEActivity(BaseActivity):
 
         # Run decoder detection in background thread to avoid UI blocking
         import threading
-        self._detect_thread = threading.Thread(target=self._detect_decoder_bg, daemon=True)
+        import ics_decoder
+        self._decoder_session = ics_decoder.DecoderSession()
+        self._detect_thread = threading.Thread(target=self._detect_decoder_bg,
+            args=(self._decoder_session,), daemon=True)
         self._detect_thread.start()
 
     def _render_detecting_state(self):
@@ -8292,11 +8296,24 @@ class IClassSEActivity(BaseActivity):
             tags='_ics_status',
         )
 
-    def _detect_decoder_bg(self):
+    def _cancel_decoder_session(self):
+        session = self._decoder_session
+        if session is not None:
+            try:
+                closed = session.cancel()
+            except Exception:
+                logger.exception('Could not close ICS Decoder session')
+                return False
+            if self._ser is closed:
+                self._ser = None
+            self._decoder_session = None
+        return True
+
+    def _detect_decoder_bg(self, session):
         """Background thread for decoder detection."""
         try:
             import ics_decoder
-            ser = ics_decoder.detect_decoder()
+            ser = session.detect()
             # Pass result back to main thread
             from lib import actstack
             if actstack._root is not None:
@@ -8304,6 +8321,10 @@ class IClassSEActivity(BaseActivity):
             else:
                 self._on_decoder_found(ser)
         except Exception as e:
+            try:
+                session.cancel()
+            except Exception:
+                logger.exception('Could not close undelivered ICS Decoder session')
             # Log error and pass None to main thread
             try:
                 import ics_decoder
@@ -8314,6 +8335,8 @@ class IClassSEActivity(BaseActivity):
 
     def _on_decoder_found(self, ser):
         """Called on main thread after decoder detection completes."""
+        if self._state == self.STATE_DESTROYED:
+            return  # onDestroy cancelled the session, including pending handles.
         try:
             if ser is None:
                 # No decoder found - show error state
@@ -8932,6 +8955,7 @@ class IClassSEActivity(BaseActivity):
     def onDestroy(self):
         # Mark as destroyed FIRST to stop all polling/background work
         self._state = self.STATE_DESTROYED
+        self._cancel_decoder_session()
         self._stop_poll()
         self._stop_target_poll()
         # Close serial port safely without blocking
@@ -9866,6 +9890,9 @@ class ICSDecoderActivity(IClassSEActivity):
 
     def _start_read(self):
         import threading
+        import ics_decoder
+        if not self._cancel_decoder_session():
+            return
         self._hide_menu()
         self._stop_poll()
         self._stop_target_poll()
@@ -9881,14 +9908,15 @@ class ICSDecoderActivity(IClassSEActivity):
         self._state = self.STATE_DETECTING
         self.setTitle('iCS Decoder')
         self._render_detecting_state()
+        self._decoder_session = ics_decoder.DecoderSession()
         self._detect_thread = threading.Thread(
-            target=self._detect_decoder_bg, args=(self._read_generation,), daemon=True)
+            target=self._detect_decoder_bg,
+            args=(self._read_generation, self._decoder_session), daemon=True)
         self._detect_thread.start()
 
-    def _detect_decoder_bg(self, generation):
+    def _detect_decoder_bg(self, generation, session):
         try:
-            import ics_decoder
-            ser = ics_decoder.detect_decoder()
+            ser = session.detect()
         except Exception:
             ser = None
         from lib import actstack
@@ -9896,11 +9924,10 @@ class ICSDecoderActivity(IClassSEActivity):
             try:
                 actstack._root.after(0, self._on_decoder_found, ser, generation)
             except Exception:
-                if ser is not None:
-                    try:
-                        ser.close()
-                    except Exception:
-                        pass
+                try:
+                    session.cancel()
+                except Exception:
+                    logger.exception('Could not close undelivered ICS Decoder session')
         else:
             self._on_decoder_found(ser, generation)
 
@@ -10172,6 +10199,7 @@ class ICSDecoderActivity(IClassSEActivity):
             self.finish()
         elif state in (self.STATE_DETECTING, self.STATE_READING):
             self._read_generation += 1
+            self._cancel_decoder_session()
             self._read_in_flight = False
             self._stop_poll()
             self._state = self.STATE_HOME
@@ -10310,6 +10338,7 @@ class ICSDecoderActivity(IClassSEActivity):
 
     def onDestroy(self):
         self._read_generation += 1
+        self._cancel_decoder_session()
         self._read_in_flight = False
         self._hide_menu()
         super().onDestroy()

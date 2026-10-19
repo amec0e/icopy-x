@@ -190,6 +190,90 @@ def test_successful_presence_probe_keeps_ownership_until_close(usb, monkeypatch)
     assert usb.handles[0].closed
 
 
+def test_foreground_session_owns_handle_before_ui_delivery(usb):
+    usb.ports['/dev/ttyACM1'] = {'reply': b'ISE\r\n'}
+    session = decoder.DecoderSession()
+    try:
+        handle = session.detect()
+        assert handle is usb.handles[0]
+        assert not decoder.DecoderPresence().check(lambda: False)
+        assert len(usb.opened) == 1
+        assert not handle.closed
+    finally:
+        session.cancel()
+    assert handle.closed
+    assert decoder.DecoderPresence().check(lambda: False)
+    assert len(usb.opened) == 2
+    assert all(port.closed for port in usb.handles)
+
+
+def test_foreground_cancel_does_not_wait_for_held_handshake(usb):
+    entered, release = threading.Event(), threading.Event()
+    session = decoder.DecoderSession()
+    results = []
+
+    def reply():
+        entered.set()
+        assert release.wait(3)
+        return b'ISE\r\n'
+
+    usb.ports['/dev/ttyACM1'] = {'reply': reply}
+    worker = threading.Thread(target=lambda: results.append(session.detect()))
+    try:
+        worker.start()
+        assert entered.wait(3)
+        # The worker still holds discovery's lock, but no result is published.
+        assert session.cancel() is None
+        assert not release.is_set()
+    finally:
+        release.set()
+        worker.join(3)
+        session.cancel()
+    assert not worker.is_alive()
+    assert results == [None]
+    assert usb.handles[0].closed
+
+
+def test_cancellation_at_discovery_return_closes_before_another_probe(usb, monkeypatch):
+    usb.ports['/dev/ttyACM1'] = {'reply': b'ISE\r\n'}
+    session = decoder.DecoderSession()
+    original = decoder.detect_decoder
+
+    def cancel_after_detect(**kwargs):
+        handle = original(**kwargs)
+        session.cancel()  # between detector return and result publication
+        return handle
+
+    monkeypatch.setattr(decoder, 'detect_decoder', cancel_after_detect)
+    try:
+        assert session.detect() is None
+        assert usb.handles[0].closed
+    finally:
+        session.cancel()
+
+
+def test_failed_close_keeps_exclusive_ownership_until_cleanup_succeeds(usb):
+    usb.ports['/dev/ttyACM1'] = {'reply': b'ISE\r\n'}
+    session = decoder.DecoderSession()
+    handle = session.detect()
+    close = handle.close
+
+    def fail():
+        raise OSError('close failed')
+
+    handle.close = fail
+    try:
+        with pytest.raises(OSError, match='close failed'):
+            session.cancel()
+        assert decoder.detect_decoder() is None
+        assert usb.opened == ['/dev/ttyACM1']
+    finally:
+        handle.close = close
+        session.cancel()
+    assert handle.closed
+    assert decoder.DecoderPresence().check(lambda: False)
+
+
 @pytest.mark.parametrize('enumeration', [None, lambda: [],
     lambda: (_ for _ in ()).throw(OSError('enumeration unavailable'))])
 def test_windows_enumeration_failure_never_guesses_ports(usb, monkeypatch, enumeration):

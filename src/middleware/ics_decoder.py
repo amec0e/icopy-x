@@ -40,6 +40,7 @@ _PM3_PORT = '/dev/ttyACM0'
 # Presence checks retain this lock through closing the temporary handle, while
 # reusing detect_decoder's guarded handshake on the same thread.
 _detection_lock = threading.RLock()
+_active_session = None
 _ICLASS_KEYS = ('AFA785A7DAB33378', '2020666666668888')
 _ANSI_ESCAPE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
 _PM3_FAILURE = re.compile(
@@ -190,6 +191,8 @@ def detect_decoder(ports=None, cancelled=lambda: False, quiet=False):
     if serial is None:
         return None
     with _detection_lock:
+        if _active_session is not None:
+            return None  # A foreground result/read still owns its serial handle.
         for port in decoder_ports() if ports is None else ports:
             if cancelled():
                 break
@@ -226,6 +229,47 @@ def detect_decoder(ports=None, cancelled=lambda: False, quiet=False):
                         pass
 
     return None
+
+
+class DecoderSession:
+    """Own foreground discovery through queued delivery, reading and cleanup."""
+
+    def __init__(self):
+        self._cancelled = threading.Event()
+        self._ser = None
+
+    def detect(self):
+        global _active_session
+        with _detection_lock:
+            if self._cancelled.is_set() or self._ser is not None:
+                return None
+            ser = detect_decoder(cancelled=self._cancelled.is_set)
+            if ser is None:
+                return None
+            self._ser = ser
+            _active_session = self
+            # Cancellation can arrive after the detector's final check but
+            # before publication. Close under the same ownership lock.
+            if self._cancelled.is_set():
+                self.cancel()
+                return None
+            return ser
+
+    def cancel(self):
+        global _active_session
+        self._cancelled.set()
+        if self._ser is None:
+            return None  # Never wait on an in-flight handshake from the UI.
+        with _detection_lock:
+            ser = self._ser
+            if ser is not None:
+                ser.close()
+                # If close raises, retain ownership instead of reopening a
+                # possibly still-owned port. A later cancel may retry cleanup.
+                self._ser = None
+                if _active_session is self:
+                    _active_session = None
+            return ser
 
 
 class DecoderPresence:
