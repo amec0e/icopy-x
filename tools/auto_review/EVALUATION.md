@@ -460,8 +460,8 @@ retains the previous snapshot digest and profile. The initial request was
 transport experiment. No candidate code was executed.
 
 The submission acknowledged a queued job in 0.981 seconds. Seventy-eight GET
-polls of that same response ID observed `queued`, `in_progress` and finally
-`incomplete`; all 79 HTTP operations returned 200. The generation took 174.409
+polls of that same response ID observed `in_progress` and finally `incomplete`;
+all 79 HTTP operations returned 200. The submission/polling attempt took 174.409
 seconds, exceeding the old synchronous connection wait within the unchanged
 360-second review budget. It ended with `max_output_tokens`: all 6,000 output
 tokens were reasoning tokens, and no review passed validation. The reviewer
