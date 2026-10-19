@@ -19,7 +19,6 @@ An Open-Source version of the iCopy-X RFID Cloner device.
  - Plugin architecture - allows for building UI apps that interact with the proxmark or linux sub-system just from JSON. Also allows a "full-screen" mode for running other binaries (ie DOOM)
  - Screen mirroring: Allows the screen to be streamed to a device via USB. Can't be used at the same time as PC-Mode: Disable / Enable in settings.
  - [ICS Decoder](ICSDecoder.md): Support for an external USB credential decoder accessory.
- - Persistent main-menu reordering using M1 to move and place items.
  - Audio Off now applies to application sound playback.
 
 # Installation
