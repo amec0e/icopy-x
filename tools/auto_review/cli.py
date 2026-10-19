@@ -1,0 +1,57 @@
+"""Prepare immutable review evidence or run an advisory Astra review."""
+import argparse
+import json
+import os
+from pathlib import Path
+import sys
+
+from .reviewer import review
+from .snapshots import canonical, collect, digest
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('operation', choices=('prepare', 'review'))
+    parser.add_argument('--repo', type=Path, default=Path('.'))
+    parser.add_argument('--base', required=True)
+    parser.add_argument('--head', required=True)
+    parser.add_argument('--context', action='append', default=[])
+    parser.add_argument('--purpose', default='', help='Stated PR outcome; treated as untrusted context')
+    parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--max-bytes', type=int, default=2_000_000)
+    parser.add_argument('--max-file-bytes', type=int, default=1_000_000)
+    parser.add_argument('--max-output-tokens', type=int, default=6000)
+    parser.add_argument('--timeout', type=int, default=120)
+    args = parser.parse_args(argv)
+    # Refuse overwriting evidence; never write to paths selected by the model.
+    args.output.mkdir(parents=True, exist_ok=False)
+    report = dict(status='INCOMPLETE', advisory=True)
+    code = 2
+    try:
+        if len(args.purpose) > 8000 or (args.operation == 'review' and not args.purpose.strip()):
+            raise ValueError('Review requires a bounded statement of the intended PR outcome')
+        bundle = collect(args.repo, args.base, args.head, args.context, args.max_bytes, args.max_file_bytes)
+        bundle['stated_purpose'] = args.purpose
+        budget_gap = 'serialized bundle exceeds input budget'
+        if len(canonical(bundle)) > args.max_bytes and not any(g['reason'] == budget_gap for g in bundle['gaps']):
+            bundle['gaps'].append(dict(path='', side='', reason=budget_gap))
+        (args.output / 'snapshot.json').write_text(json.dumps(bundle, indent=2), encoding='utf-8')
+        report.update(base=bundle['base'], head=bundle['head'], snapshot_sha256=digest(bundle), gaps=bundle['gaps'])
+        if args.operation == 'prepare':
+            report['status'] = 'PREPARED' if not bundle['gaps'] else 'INCOMPLETE'
+            code = 0 if not bundle['gaps'] else 2
+        else:
+            policy = Path(__file__).with_name('policy.md').read_text(encoding='utf-8')
+            report = review(bundle, policy, os.environ.get('OPENAI_API_KEY'),
+                            max_output_tokens=args.max_output_tokens, timeout=args.timeout)
+            code = 0 if report['status'] == 'ADVISORY_COMPLETE' else 2
+    except (ValueError, OSError, TimeoutError) as error:
+        # Never persist API bodies, credentials or arbitrary exception reprs.
+        report['error'] = type(error).__name__
+    (args.output / 'report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
+    print(json.dumps(dict(status=report['status'], report=str(args.output / 'report.json'))))
+    return code
+
+
+if __name__ == '__main__':
+    sys.exit(main())
