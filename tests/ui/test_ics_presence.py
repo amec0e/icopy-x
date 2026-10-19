@@ -375,3 +375,87 @@ def test_windows_enumeration_failure_never_guesses_ports(usb, monkeypatch, enume
     monkeypatch.setattr(decoder, '_comports', enumeration)
     assert decoder.detect_decoder() is None
     assert usb.opened == []
+
+
+@pytest.fixture
+def windows_usb(usb, monkeypatch):
+    monkeypatch.setattr(decoder.sys, 'platform', 'win32')
+    usb.ports = {'COM7': {'reply': b'ISE\r\n', 'serial_number': 'first'}}
+    monkeypatch.setattr(decoder, '_comports', lambda: [
+        SimpleNamespace(device=port, serial_number=data.get('serial_number'))
+        for port, data in usb.ports.items()])
+    return usb
+
+
+def test_windows_same_com_replacement_requires_new_identity_handshake(windows_usb):
+    presence = decoder.DecoderPresence()
+    assert presence.check(lambda: False)
+    windows_usb.ports['COM7'] = {'reply': b'other\r\n', 'serial_number': 'replacement'}
+    assert not presence.check(lambda: False)
+    assert windows_usb.opened == ['COM7', 'COM7']
+    assert all(handle.closed for handle in windows_usb.handles)
+
+
+def test_windows_pause_invalidates_positive_even_with_identical_metadata(windows_usb):
+    presence = decoder.DecoderPresence()
+    observation = object()
+    assert presence.check(lambda: False, observation=observation)
+    assert presence.check(lambda: False, observation=observation)
+    assert windows_usb.opened == ['COM7']
+    windows_usb.ports['COM7']['reply'] = b'other\r\n'
+    assert not presence.check(lambda: False, observation=object())
+    assert windows_usb.opened == ['COM7', 'COM7']
+
+
+def test_windows_pause_resets_exhausted_attempts_without_guessed_ports(windows_usb):
+    presence = decoder.DecoderPresence()
+    observation = object()
+    windows_usb.ports['COM7']['reply'] = b''
+    for _ in range(8):
+        assert not presence.check(lambda: False, observation=observation)
+    assert windows_usb.opened == ['COM7'] * 3
+    windows_usb.ports['COM7']['reply'] = b'ISE\r\n'
+    assert presence.check(lambda: False, observation=object())
+    assert windows_usb.opened == ['COM7'] * 4
+
+
+def test_windows_missing_metadata_still_revalidates_after_pause(windows_usb):
+    windows_usb.ports['COM7'].pop('serial_number')
+    presence = decoder.DecoderPresence()
+    assert presence.check(lambda: False, observation=object())
+    windows_usb.ports['COM7']['reply'] = b'other\r\n'
+    assert not presence.check(lambda: False, observation=object())
+
+
+def test_linux_retains_attachment_evidence_across_menu_pause(usb):
+    usb.ports['/dev/ttyACM1'] = {'reply': b'ISE\r\n'}
+    presence = decoder.DecoderPresence()
+    assert presence.check(lambda: False, observation=object())
+    assert presence.check(lambda: False, observation=object())
+    assert usb.opened == ['/dev/ttyACM1']
+
+
+def test_windows_enumeration_failure_drops_cached_presence(windows_usb, monkeypatch):
+    presence = decoder.DecoderPresence()
+    enumerate_ports = decoder._comports
+    assert presence.check(lambda: False)
+
+    def unavailable():
+        raise OSError('USB enumeration unavailable')
+
+    monkeypatch.setattr(decoder, '_comports', unavailable)
+    assert not presence.check(lambda: False)
+    assert windows_usb.opened == ['COM7']
+    monkeypatch.setattr(decoder, '_comports', enumerate_ports)
+    assert presence.check(lambda: False)
+    assert windows_usb.opened == ['COM7', 'COM7']
+
+
+def test_cancelled_old_observation_does_not_invalidate_current_cache(windows_usb):
+    presence = decoder.DecoderPresence()
+    old, current = object(), object()
+    assert presence.check(lambda: False, observation=old)
+    assert presence.check(lambda: False, observation=current)
+    assert not presence.check(lambda: True, observation=old)
+    assert presence.check(lambda: False, observation=current)
+    assert windows_usb.opened == ['COM7', 'COM7']

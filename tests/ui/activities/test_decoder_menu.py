@@ -23,7 +23,7 @@ def actions(menu):
 
 
 def deliver(menu, workers, present):
-    menu._decoder_presence = SimpleNamespace(check=lambda cancelled: present)
+    menu._decoder_presence = SimpleNamespace(check=lambda cancelled, observation: present)
     # A previous poll can still be waiting in the deferred scheduler, including
     # a cancelled worker from before onPause. Finish it before the new check.
     if menu._decoder_worker is not None and menu._decoder_worker.is_alive():
@@ -89,7 +89,7 @@ def test_navigation_while_revalidating_takes_priority(menu, activity_workers, ke
 
 @pytest.mark.parametrize('finish', ['onPause', 'onDestroy'])
 def test_late_result_cannot_restore_menu_or_schedule_after_exit(menu, activity_workers, finish):
-    menu._decoder_presence = SimpleNamespace(check=lambda cancelled: True)
+    menu._decoder_presence = SimpleNamespace(check=lambda cancelled, observation: True)
     menu.getCanvas().advance(250)
     worker = activity_workers[-1]
     getattr(menu, finish)()
@@ -101,7 +101,7 @@ def test_late_result_cannot_restore_menu_or_schedule_after_exit(menu, activity_w
 
 
 def test_pause_resume_rejects_inflight_result_and_keeps_one_worker(menu, activity_workers):
-    menu._decoder_presence = SimpleNamespace(check=lambda cancelled: True)
+    menu._decoder_presence = SimpleNamespace(check=lambda cancelled, observation: True)
     menu.getCanvas().advance(250)
     old = activity_workers[-1]
     menu.onPause()
@@ -118,7 +118,7 @@ def test_pause_resume_rejects_inflight_result_and_keeps_one_worker(menu, activit
 
 
 def test_detection_error_hides_entry_without_crashing_ui(menu, activity_workers):
-    def fail(cancelled):
+    def fail(cancelled, observation):
         raise OSError('USB unavailable')
     menu._decoder_presence = SimpleNamespace(check=fail)
     menu.getCanvas().advance(250)
@@ -126,3 +126,69 @@ def test_detection_error_hides_entry_without_crashing_ui(menu, activity_workers)
     menu.getCanvas().advance(1000)
     assert 'iclass_se' not in actions(menu)
     assert menu.resumed
+
+
+def test_resume_starts_new_observation_but_continuous_polls_share_it(menu, activity_workers):
+    observations = []
+
+    def check(cancelled, observation):
+        observations.append(observation)
+        return False
+
+    menu._decoder_presence = SimpleNamespace(check=check)
+    menu.getCanvas().advance(250)
+    activity_workers[-1].run()
+    menu.getCanvas().advance(1000)
+    activity_workers[-1].run()
+    assert len(observations) == 2 and observations[0] is observations[1]
+    menu.onPause()
+    menu.onResume()
+    menu.getCanvas().advance(250)
+    activity_workers[-1].run()
+    assert len(observations) == 3 and observations[-1] is not observations[0]
+
+
+@pytest.mark.parametrize('initial_reply', [b'ISE\r\n', b'other\r\n'])
+def test_windows_menu_rechecks_same_com_after_paused_replacement(
+        menu, activity_workers, monkeypatch, initial_reply):
+    import ics_decoder
+    bus = SimpleNamespace(reply=initial_reply, opened=[], handles=[])
+
+    def open_port(path):
+        bus.opened.append(path)
+        handle = SimpleNamespace(closed=False)
+        handle.reset_input_buffer = lambda: None
+        handle.write = lambda _: None
+        handle.readline = lambda _: bus.reply
+        handle.close = lambda: setattr(handle, 'closed', True)
+        bus.handles.append(handle)
+        return handle
+
+    monkeypatch.setattr(ics_decoder.sys, 'platform', 'win32')
+    monkeypatch.setattr(ics_decoder, 'serial', object())
+    monkeypatch.setattr(ics_decoder, '_comports', lambda: [SimpleNamespace(device='COM7')])
+    monkeypatch.setattr(ics_decoder, '_open_serial', open_port)
+    monkeypatch.setattr(ics_decoder.time, 'sleep', lambda _: None)
+    monkeypatch.setattr(ics_decoder, '_log', lambda _: None)
+    menu._decoder_presence = ics_decoder.DecoderPresence()
+
+    def poll_once():
+        if menu._decoder_worker is not None and menu._decoder_worker.is_alive():
+            menu._decoder_worker.run()
+        menu.getCanvas().advance(1000)
+        activity_workers[-1].run()
+        menu.getCanvas().advance(1000)
+
+    for _ in range(4):
+        poll_once()
+    was_decoder = initial_reply == b'ISE\r\n'
+    assert ('iclass_se' in actions(menu)) == was_decoder
+    prior = 1 if was_decoder else 3
+    assert bus.opened == ['COM7'] * prior
+    menu.onPause()
+    bus.reply = b'other\r\n' if was_decoder else b'ISE\r\n'
+    menu.onResume()
+    poll_once()
+    assert ('iclass_se' in actions(menu)) != was_decoder
+    assert bus.opened == ['COM7'] * (prior + 1)
+    assert all(handle.closed for handle in bus.handles)

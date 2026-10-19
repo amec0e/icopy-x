@@ -147,6 +147,15 @@ def _open_serial(port):
         return None
 
 
+def _windows_ports():
+    if _comports is not None:
+        try:
+            return list(_comports())
+        except Exception:
+            pass
+    return []
+
+
 def decoder_ports():
     """Enumerate existing accessory candidates, excluding the reserved PM3.
 
@@ -159,11 +168,7 @@ def decoder_ports():
         for g in ('/dev/ttyACM*', '/dev/ttyUSB*'):
             candidates.extend(glob.glob(g))
     elif sys.platform.startswith('win'):
-        if _comports is not None:
-            try:
-                candidates = [p.device for p in _comports()]
-            except Exception:
-                candidates = []
+        candidates = [p.device for p in _windows_ports()]
     elif sys.platform.startswith('darwin'):
         for g in ('/dev/cu.usbmodem*', '/dev/cu.usbserial*'):
             candidates.extend(glob.glob(g))
@@ -309,28 +314,42 @@ class DecoderPresence:
 
     A devnode's inode/ctime distinguishes unplug/replug even at the same path
     between polls. Three attempts allow firmware startup; unrelated ports are
-    not reopened indefinitely. No verified accessory USB-ID list is known.
+    not reopened indefinitely. Windows metadata detects changed devices but
+    cannot prove continuity across a pause; callers must start a new observation
+    on resume. Metadata never substitutes for Who/ISE identity confirmation.
     """
 
     def __init__(self):
         self._attachments = {}
+        self._observation = None
 
     def _snapshot(self):
+        if sys.platform.startswith('win'):
+            # Use one enumeration for both the name and its optional USB data.
+            # A same-COM replacement must not inherit the old positive result.
+            rows = {os.path.realpath(info.device): info for info in _windows_ports()}
+            fields = ('vid', 'pid', 'serial_number', 'location', 'hwid')
+            return {(path,) + tuple(getattr(info, field, None) for field in fields): info.device
+                    for path, info in rows.items()}
         result = {}
         for port in decoder_ports():
             identity = (os.path.realpath(port),)
-            if not sys.platform.startswith('win'):
-                try:
-                    info = os.stat(port)
-                except OSError:
-                    continue  # unplugged during enumeration
-                identity += (info.st_ino, info.st_ctime_ns)
+            try:
+                info = os.stat(port)
+            except OSError:
+                continue  # unplugged during enumeration
+            identity += (info.st_ino, info.st_ctime_ns)
             result[identity] = port
         return result
 
-    def check(self, cancelled):
+    def check(self, cancelled, observation=None):
         if cancelled() or not _ready_for_discovery():
             return False
+        if sys.platform.startswith('win') and observation is not self._observation:
+            # Replugging while a child activity owns the UI may leave every
+            # enumerated field unchanged. Discard successes and failed retries.
+            self._attachments.clear()
+            self._observation = observation
         ports = self._snapshot()
         self._attachments = {key: value for key, value in self._attachments.items()
                              if key in ports}

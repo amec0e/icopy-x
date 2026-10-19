@@ -179,6 +179,7 @@ class MainActivity(BaseActivity):
         self._decoder_results = queue.Queue()
         self._decoder_timer = None
         self._decoder_restore_focus = False
+        self._decoder_observation = None
 
     def onCreate(self, bundle=None):
         """Set up the main menu.
@@ -236,6 +237,7 @@ class MainActivity(BaseActivity):
 
         # Schedule from Tk only. Workers put results in a queue; they never
         # touch a paused/destroyed activity's canvas or call Tk.after().
+        self._decoder_observation = object()
         self._decoder_restore_focus = bool(self.lv_main_page is not None and
             self._menu_items[self.lv_main_page.selection()][2] == 'iclass_se')
         self._set_decoder_visible(False)
@@ -270,13 +272,14 @@ class MainActivity(BaseActivity):
         if self._decoder_worker is None or not self._decoder_worker.is_alive():
             self._decoder_cancel = threading.Event()
             token = self._decoder_cancel
+            observation = self._decoder_observation
 
             def check():
                 try:
                     if self._decoder_presence is None:
                         import ics_decoder
                         self._decoder_presence = ics_decoder.DecoderPresence()
-                    present = self._decoder_presence.check(token.is_set)
+                    present = self._decoder_presence.check(token.is_set, observation=observation)
                 except Exception:
                     logger.exception('Could not check ICS Decoder presence')
                     present = False
