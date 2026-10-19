@@ -93,7 +93,7 @@ patched pins, and Dependabot checks test/station requirements and Actions weekly
 Legacy dependency alerts remain open; see [TEST_DEPENDENCIES.md](TEST_DEPENDENCIES.md).
 These changes are separate from a device-runtime migration.
 The [Astra advisory pilot](../tools/auto_review/README.md) from #88 is available as
-a manual workflow on trusted main. The diagnostic update #90 has 27 offline
+a manual workflow on trusted main. Updates through #93 have 37 offline
 contracts passing on Linux and Windows, with host/build/QEMU checks passed before
 merge. [Hosted preparation 39248718899](https://github.com/lab-401/icopy-x/actions/runs/39248718899)
 completed without an API key and produced the same immutable snapshot digest as
@@ -101,11 +101,15 @@ the local historical-menu trial. This validates hosted collection, not model
 quality. The first [live trial](https://github.com/lab-401/icopy-x/actions/runs/39252019439)
 confirmed service-account authentication and Astra access, but response/evidence
 validation rejected its first response. After fixed diagnostics and numbered
-source were added, three live trials completed nine validated responses. The
-known Move regression was identified and two removal controls found no introduced
-defects. Each final review reported remaining context gaps; no live trial has
-established complete review coverage. The next work is bounded reference/context
-collection and a broader labeled evaluation, not automatic enforcement. See
+source were added, five live trials completed fifteen validated responses. The
+known Move regression was identified twice. Three removal controls found no
+introduced defects; the last reached complete advisory source coverage after
+bounded reference searches and caller context were supplied in
+[run 39261258391](https://github.com/lab-401/icopy-x/actions/runs/39261258391).
+Stable source prompts also demonstrated cache reuse on both later review passes.
+Context selection is still manual; complete source coverage is not a test pass,
+device acceptance or merge approval. The next work is the broader labeled
+evaluation before automatic invocation or publication. See
 [the evaluation record](../tools/auto_review/EVALUATION.md) for exact revisions,
 findings and usage. The API key is in the main-only
 `astra-review` environment. Automatic invocation/publication and a model gate
