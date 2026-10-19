@@ -16,11 +16,11 @@ def digest(value):
     return hashlib.sha256(canonical(value)).hexdigest()
 
 
-def git(repo, *args):
+def git(repo, *args, allow_no_match=False, max_output=32 * 1024 * 1024):
     env = {key: value for key, value in os.environ.items()
            if not key.startswith('GIT_') and key != 'OPENAI_API_KEY'}
     env.update(GIT_NO_REPLACE_OBJECTS='1', GIT_OPTIONAL_LOCKS='0', GIT_TERMINAL_PROMPT='0')
-    limit = 32 * 1024 * 1024
+    limit = max_output
     with tempfile.TemporaryFile() as output:
         child = subprocess.Popen(['git', '-C', str(repo), '--no-pager', *args],
                                  stdout=output, stderr=subprocess.DEVNULL,
@@ -35,7 +35,8 @@ def git(repo, *args):
             if child.poll() is None:
                 child.kill()
             child.wait(timeout=5)
-        if child.returncode:
+        if child.returncode and not (allow_no_match and child.returncode == 1
+                                    and os.fstat(output.fileno()).st_size == 0):
             raise ValueError('Git snapshot operation failed: ' + args[0])
         if os.fstat(output.fileno()).st_size > limit:
             raise ValueError('Git result exceeds collector limit')
@@ -69,9 +70,58 @@ def tree(repo, revision):
     return result
 
 
-def collect(repo, base, head, context=(), max_bytes=2_000_000, max_file_bytes=1_000_000):
+def search_terms(terms):
+    """Bound literal UTF-8 terms; they never become regexes, paths or options."""
+    if (not isinstance(terms, (list, tuple)) or len(terms) > 16
+            or any(not isinstance(term, str) or not term.strip() or len(term) > 128
+                   or any(ord(c) < 32 or ord(c) == 127 for c in term) for term in terms)):
+        raise ValueError('Search requires at most 16 nonempty single-line terms of 128 characters')
+    return sorted(set(terms))
+
+
+def references(repo, revision, inventory, terms):
+    """Search raw Git blobs, not the worktree, attributes, filters or submodules.
+
+    -a avoids attribute/binary heuristics hiding literal matches. Binary match
+    metadata is retained without passing raw bytes to the model. Even a readable
+    hit is only a reference hint. Results use Git's LF-based line numbering.
+    """
+    args = ['grep', '-a', '-n', '-z', '-F', '--full-name', '--no-textconv',
+            '--no-recurse-submodules', '--no-color', '--no-column', '--no-heading', '--no-break']
+    for term in terms:
+        args.extend(['-e', term])
+    raw = git(repo, *args, revision, '--', allow_no_match=True, max_output=512_000)
+    lines = raw.split(b'\n')
+    if lines[-1] != b'' or len(lines) - 1 > 250:
+        raise ValueError('Reference search result limit/format')
+    matches = []
+    for record in lines[:-1]:
+        location, number, content = record.split(b'\0', 2)
+        if not location.startswith((revision + ':').encode('ascii')) or not number.isdigit():
+            raise ValueError('Invalid reference search location')
+        path = safe_path(location[len(revision) + 1:].decode('utf-8'))
+        item = inventory.get(path)
+        if not item or item['kind'] != 'blob' or item['mode'] not in ('100644', '100755'):
+            raise ValueError('Unsupported reference search object')
+        found = [term for term in terms if term.encode('utf-8') in content]
+        if not found or int(number) < 1:
+            raise ValueError('Invalid reference search match')
+        match = dict(path=path, oid=item['oid'], line=int(number), terms=found)
+        try:
+            text = content.decode('utf-8')
+            if '\0' in text:
+                raise UnicodeError()
+            match['text'] = text
+        except UnicodeError:
+            match['text_unavailable'] = 'binary/non-UTF-8 match line; inspect separately if relevant'
+        matches.append(match)
+    return dict(revision=revision, status='complete', matches=matches)
+
+
+def collect(repo, base, head, context=(), max_bytes=2_000_000, max_file_bytes=1_000_000, searches=()):
     if not 1024 <= max_bytes <= 8_000_000 or not 1024 <= max_file_bytes <= 2_000_000:
         raise ValueError('Snapshot limits outside allowed range')
+    terms = search_terms(searches)
     base, head = commit(repo, base), commit(repo, head)
     merge_base = git(repo, 'merge-base', base, head).decode().strip()
     if merge_base != base:
@@ -120,6 +170,16 @@ def collect(repo, base, head, context=(), max_bytes=2_000_000, max_file_bytes=1_
                 continue
             blob.update(text=text, sha256=hashlib.sha256(raw).hexdigest())
         bundle['files'].append(row)
+    if terms:
+        bundle['reference_search'] = dict(terms=terms, scope='all tracked regular blobs; literal UTF-8 bytes; '
+            'no submodules, symlinks, filters or worktree; LF-based line numbers',
+            limits=dict(max_lines_per_revision=250, max_output_bytes_per_revision=512_000))
+        for side, revision, inventory in (('base', base, before), ('head', head, after)):
+            try:
+                bundle['reference_search'][side] = references(repo, revision, inventory, terms)
+            except (ValueError, OSError, TimeoutError):
+                bundle['reference_search'][side] = dict(revision=revision, status='incomplete')
+                bundle['gaps'].append(dict(path='', side=side, reason='reference search failed or exceeded limits'))
     # JSON escaping and metadata also count. Never silently truncate content.
     if len(canonical(bundle)) > max_bytes:
         bundle['gaps'].append(dict(path='', side='', reason='serialized bundle exceeds input budget'))

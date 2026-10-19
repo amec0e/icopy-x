@@ -105,6 +105,127 @@ class PilotTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'context'):
             self.bundle(context=['missing.py'])
 
+    def test_reference_search_uses_both_commits_and_ignores_dirty_files(self):
+        self.write('caller.py', 'menu()\n# $(echo bad) --option [literal] caf\u00e9\n')
+        self.head = self.commit()
+        self.write('caller.py', 'dirty_only()')
+        self.write('untracked.py', 'untracked_only()')
+        terms = ['menu(', 'missing_symbol', '$(echo bad)', '--option', '[literal]', 'caf\u00e9',
+                 'dirty_only', 'untracked_only']
+        bundle = self.bundle(searches=terms)
+        self.assertFalse(bundle['gaps'])
+        search = bundle['reference_search']
+        self.assertEqual(search['base']['revision'], self.base)
+        self.assertEqual(search['head']['revision'], self.head)
+        self.assertEqual(len(search['base']['matches']), 1)
+        callers = [m for m in search['head']['matches'] if m['path'] == 'caller.py']
+        self.assertEqual([m['line'] for m in callers], [1, 2])
+        self.assertEqual(callers[0]['oid'], self.git('rev-parse', self.head + ':caller.py'))
+        present = {term for m in search['head']['matches'] for term in m['terms']}
+        self.assertTrue({'menu(', '$(echo bad)', '--option', '[literal]', 'caf\u00e9'} <= present)
+        self.assertFalse({'missing_symbol', 'dirty_only', 'untracked_only'} & present)
+        self.assertEqual(search['head']['status'], 'complete')
+
+    def test_reference_search_records_absence_after_deletion(self):
+        (self.repo / 'feature.py').unlink()
+        self.head = self.commit()
+        search = self.bundle(searches=['def menu'])['reference_search']
+        self.assertEqual(len(search['base']['matches']), 1)
+        self.assertEqual(search['head']['matches'], [])
+        self.assertEqual(search['head']['status'], 'complete')
+
+    def test_reference_search_failure_never_claims_absence(self):
+        real_git = snapshots.git
+        def failing_git(repo, *args, **kwargs):
+            if args[0] == 'grep':
+                raise ValueError('search failed')
+            return real_git(repo, *args, **kwargs)
+        with patch.object(snapshots, 'git', side_effect=failing_git):
+            bundle = self.bundle(searches=['menu'])
+        self.assertEqual(len(bundle['gaps']), 2)
+        for side in ('base', 'head'):
+            self.assertEqual(bundle['reference_search'][side]['status'], 'incomplete')
+            self.assertNotIn('matches', bundle['reference_search'][side])
+        with self.assertRaisesRegex(ValueError, 'coverage gaps'):
+            reviewer.review(bundle, 'policy', 'unused', request_fn=lambda *a: self.fail('API called'))
+
+    def test_git_search_errors_are_not_treated_as_no_matches(self):
+        with self.assertRaisesRegex(ValueError, 'Git snapshot operation failed'):
+            snapshots.git(self.repo, 'grep', '--invalid-reviewer-test-option', allow_no_match=True)
+        # The allowance is opt-in; all other Git operations keep their strict status check.
+        with self.assertRaisesRegex(ValueError, 'Git snapshot operation failed'):
+            snapshots.git(self.repo, 'grep', '-F', '-e', 'absent_unique', self.head, '--')
+
+    def test_reference_search_limits_do_not_silently_truncate(self):
+        self.write('many.py', 'matchme\n' * 251)
+        self.head = self.commit()
+        bundle = self.bundle(searches=['matchme'])
+        self.assertEqual(bundle['reference_search']['base']['matches'], [])
+        self.assertEqual(bundle['reference_search']['head']['status'], 'incomplete')
+        self.assertTrue(bundle['gaps'])
+        # Git result size is bounded independently from the source bundle cap.
+        self.write('many.py', 'matchme' + 'x' * 512_000)
+        self.head = self.commit()
+        bundle = self.bundle(searches=['matchme'])
+        self.assertEqual(bundle['reference_search']['head']['status'], 'incomplete')
+
+    def test_reference_search_does_not_follow_links_or_use_attributes(self):
+        self.write('caller.py', 'real_reference()\n')
+        self.write('.gitattributes', '*.py -diff\n')
+        self.head = self.commit()
+        oid = subprocess.check_output(['git', '-C', str(self.repo), 'hash-object', '-w', '--stdin'],
+                                      input=b'../../outside_unique').decode().strip()
+        self.git('update-index', '--add', '--cacheinfo', '120000,' + oid + ',link')
+        self.git('commit', '-qm', 'symlink fixture')
+        self.base = self.git('rev-parse', 'HEAD')
+        self.write('feature.py', 'pass\n')
+        # Commit only this tracked edit; do not replace the index-only symlink.
+        self.git('add', 'feature.py')
+        self.git('commit', '-qm', 'change')
+        self.head = self.git('rev-parse', 'HEAD')
+        bundle = self.bundle(searches=['outside_unique', 'real_reference'])
+        self.assertFalse(bundle['gaps'])
+        for side in ('base', 'head'):
+            matches = bundle['reference_search'][side]['matches']
+            self.assertEqual([m['path'] for m in matches], ['caller.py'])
+            self.assertEqual(matches[0]['terms'], ['real_reference'])
+
+    def test_unrenderable_reference_match_is_recorded_never_hidden_as_absence(self):
+        (self.repo / 'binary').write_bytes(b'\0needle\xff\n')
+        self.base = self.commit()
+        self.write('feature.py', 'pass\n')
+        self.head = self.commit()
+        bundle = self.bundle(searches=['needle'])
+        self.assertFalse(bundle['gaps'])
+        for side in ('base', 'head'):
+            search = bundle['reference_search'][side]
+            self.assertEqual(search['status'], 'complete')
+            self.assertEqual(len(search['matches']), 1)
+            match = search['matches'][0]
+            self.assertEqual(match['path'], 'binary')
+            self.assertEqual(match['terms'], ['needle'])
+            self.assertIn('text_unavailable', match)
+            self.assertNotIn('text', match)
+
+    def test_reference_terms_are_bounded_literals(self):
+        for terms in ('string', {}, [''], [' '], ['a\nb'], ['a\0b'], ['a\x7fb'], ['a' * 129],
+                      ['term'] * 17, [1]):
+            with self.subTest(terms=terms), self.assertRaises(ValueError):
+                snapshots.search_terms(terms)
+        self.assertEqual(snapshots.search_terms(['--option', 'a.*', '--option']), ['--option', 'a.*'])
+
+    def test_search_hits_do_not_authorize_findings_without_full_context(self):
+        self.write('unchanged.py', 'menu()\n')
+        self.base = self.commit()
+        self.write('feature.py', 'pass\n')
+        self.head = self.commit()
+        bundle = self.bundle(searches=['menu'])
+        self.assertTrue(bundle['reference_search']['head']['matches'])
+        value = self.valid()
+        value['findings'][0].update(path='unchanged.py', line=1, quote='menu()')
+        with self.assertRaises(ValueError):
+            contract.validate(value, bundle)
+
     def test_finding_cannot_forge_path_line_quote_or_test_result(self):
         for key, value in [('path', 'missing.py'), ('line', 999), ('line', True),
                            ('quote', 'invented'), ('validation', 'reproduced')]:
@@ -315,13 +436,24 @@ class PilotTests(unittest.TestCase):
 
     def test_hosted_inputs_refuse_shell_and_git_injection(self):
         valid = dict(REVIEW_BASE=self.base, REVIEW_HEAD=self.head, REVIEW_CONTEXT='["feature.py"]')
-        self.assertEqual(hosted.inputs(valid), ([self.base, self.head], ['feature.py']))
+        self.assertEqual(hosted.inputs(valid), ([self.base, self.head], ['feature.py'], []))
         for field, value in [('REVIEW_BASE', '--upload-pack=bad'), ('REVIEW_HEAD', '$(echo bad)'),
                              ('REVIEW_CONTEXT', '{}'), ('REVIEW_CONTEXT', '["../outside"]'),
-                             ('REVIEW_CONTEXT', '[1]')]:
+                             ('REVIEW_CONTEXT', '[1]'), ('REVIEW_SEARCHES', '{}'),
+                             ('REVIEW_SEARCHES', '["a\\nb"]'), ('REVIEW_SEARCHES', '[false]')]:
             changed = dict(valid, **{field: value})
             with self.subTest(field=field, value=value), self.assertRaises(ValueError):
                 hosted.inputs(changed)
+
+    def test_hosted_passes_search_terms_as_single_literal_arguments(self):
+        env = dict(GITHUB_REF='refs/heads/main', REVIEW_BASE=self.base, REVIEW_HEAD=self.head,
+                   REVIEW_CONTEXT='[]', REVIEW_SEARCHES='["--option", "$(echo bad)"]')
+        with patch.dict('os.environ', env), patch.object(hosted, 'cli', return_value=0) as call:
+            self.assertEqual(hosted.main('prepare'), 0)
+        args = call.call_args[0][0]
+        self.assertIn('--search=--option', args)
+        self.assertIn('--search=$(echo bad)', args)
+        self.assertNotIn('--option', args)
 
     def test_hosted_refuses_candidate_branch(self):
         with patch.dict('os.environ', {'GITHUB_REF': 'refs/heads/contributor'}):

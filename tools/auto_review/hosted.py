@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 from .cli import main as cli
-from .snapshots import safe_path
+from .snapshots import safe_path, search_terms
 
 
 def inputs(environ):
@@ -19,13 +19,17 @@ def inputs(environ):
     context = json.loads(raw)
     if not isinstance(context, list) or len(context) > 100 or any(not isinstance(p, str) for p in context):
         raise ValueError('Context must be a bounded JSON array of paths')
-    return revisions, [safe_path(p) for p in context]
+    raw_searches = environ.get('REVIEW_SEARCHES', '[]')
+    if len(raw_searches) > 16000:
+        raise ValueError('Search input exceeds limit')
+    searches = search_terms(json.loads(raw_searches))
+    return revisions, [safe_path(p) for p in context], searches
 
 
 def main(operation):
     if os.environ.get('GITHUB_REF') != 'refs/heads/main':
         raise ValueError('Hosted pilot runs only from trusted main')
-    revisions, context = inputs(os.environ)
+    revisions, context, searches = inputs(os.environ)
     if operation == 'fetch':
         # Public repository, fixed origin, no auth/header/URL supplied by a PR.
         env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_') and k != 'OPENAI_API_KEY'}
@@ -40,6 +44,9 @@ def main(operation):
     args.extend(['--purpose', os.environ.get('REVIEW_PURPOSE', '')])
     for path in context:
         args.extend(['--context', path])
+    for term in searches:
+        # Equals form also preserves literal terms beginning with a dash.
+        args.append('--search=' + term)
     return cli(args)
 
 

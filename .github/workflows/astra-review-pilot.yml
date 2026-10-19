@@ -24,6 +24,10 @@ on:
         description: JSON array of additional repository paths for caller/contract context
         type: string
         default: '[]'
+      searches:
+        description: JSON array of literal reference terms (max 16, 128 characters each)
+        type: string
+        default: '[]'
 
 permissions:
   contents: read
@@ -54,6 +58,7 @@ jobs:
           REVIEW_BASE: ${{ inputs.base }}
           REVIEW_HEAD: ${{ inputs.head }}
           REVIEW_CONTEXT: ${{ inputs.context }}
+          REVIEW_SEARCHES: ${{ inputs.searches }}
           REVIEW_PURPOSE: ${{ inputs.purpose }}
         run: python -m tools.auto_review.hosted fetch
       - name: Prepare evidence (no API key)
@@ -62,6 +67,7 @@ jobs:
           REVIEW_BASE: ${{ inputs.base }}
           REVIEW_HEAD: ${{ inputs.head }}
           REVIEW_CONTEXT: ${{ inputs.context }}
+          REVIEW_SEARCHES: ${{ inputs.searches }}
           REVIEW_PURPOSE: ${{ inputs.purpose }}
         run: python -m tools.auto_review.hosted prepare
       - name: Run advisory review
@@ -71,6 +77,7 @@ jobs:
           REVIEW_BASE: ${{ inputs.base }}
           REVIEW_HEAD: ${{ inputs.head }}
           REVIEW_CONTEXT: ${{ inputs.context }}
+          REVIEW_SEARCHES: ${{ inputs.searches }}
           REVIEW_PURPOSE: ${{ inputs.purpose }}
         run: python -m tools.auto_review.hosted review
       - name: Preserve evidence and advisory result

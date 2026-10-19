@@ -16,6 +16,7 @@ def main(argv=None):
     parser.add_argument('--base', required=True)
     parser.add_argument('--head', required=True)
     parser.add_argument('--context', action='append', default=[])
+    parser.add_argument('--search', action='append', default=[], help='Literal reference term, not a regex')
     parser.add_argument('--purpose', default='', help='Stated PR outcome; treated as untrusted context')
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--max-bytes', type=int, default=2_000_000)
@@ -30,7 +31,8 @@ def main(argv=None):
     try:
         if len(args.purpose) > 8000 or (args.operation == 'review' and not args.purpose.strip()):
             raise ValueError('Review requires a bounded statement of the intended PR outcome')
-        bundle = collect(args.repo, args.base, args.head, args.context, args.max_bytes, args.max_file_bytes)
+        bundle = collect(args.repo, args.base, args.head, args.context, args.max_bytes, args.max_file_bytes,
+                         searches=args.search)
         bundle['stated_purpose'] = args.purpose
         budget_gap = 'serialized bundle exceeds input budget'
         if len(canonical(bundle)) > args.max_bytes and not any(g['reason'] == budget_gap for g in bundle['gaps']):
