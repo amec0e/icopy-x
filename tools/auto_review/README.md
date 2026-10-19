@@ -28,6 +28,24 @@ coverage gaps and any explicitly selected unchanged caller/contract files. The
 `context` input is a JSON array, e.g. `["src/lib/actmain.py"]`. Choose context after
 reading the change; the collector does not autonomously discover dependencies.
 Then run `review` with the same identities/context. Download the run artifact.
+The optional `searches` input is a JSON array of literal reference terms, e.g.
+`["menu_order", "ordered_items", "main_menu.json"]`. It searches both immutable
+commits and records matching paths, blob IDs, lines and terms. An empty match
+list means literal absence in that search scope, not absence of computed names
+or dynamic imports. Choose caller context from the results; search hits alone
+cannot support formal findings without full source in `files`.
+
+Search covers tracked regular Git blobs, including binary bytes, without filters,
+attributes, symlink targets, submodules or the worktree. Non-UTF-8/NUL-containing
+matches retain path, blob, line and term metadata with `text_unavailable`; they
+are not silently omitted or reported as absence. Inspect them separately if
+relevant. Changed binaries still block the full-source review as before.
+Search accepts at most 16 terms of 128 characters, with 250 matching
+lines and 512 KB output per revision and a 30-second Git timeout. Failed,
+malformed or oversized searches create explicit gaps and prevent API calls;
+results are never silently truncated into a false claim of absence. Search uses
+LF-based Git line numbers; full-source citation validation remains unchanged.
+
 Each live invocation makes at most three API requests, no retries, with a 6,000
 output-token cap per request (including reasoning). Default source/bundle limits
 are 2 MB total and 1 MB per file. The job has a 12-minute wall-clock limit; API
@@ -98,7 +116,8 @@ matching the JSON schema is not evidence that its reasoning is correct. Live
 quality evaluation and an automatic PR integration are still pending this pilot.
 
 For an optional local run, use `python -m tools.auto_review.cli prepare` or
-`review` with `--repo`, `--base`, `--head`, `--purpose`, repeated `--context` and a new `--output`
+`review` with `--repo`, `--base`, `--head`, `--purpose`, repeated `--context` and
+`--search=literal` arguments, and a new `--output`
 directory. Only a local `review` needs `OPENAI_API_KEY` in its process environment.
 Do not commit keys or private physical-device evidence. The hosted artifacts
 contain repository source and review text; use this workflow for this public
