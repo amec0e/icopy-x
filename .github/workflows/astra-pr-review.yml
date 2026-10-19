@@ -1,0 +1,128 @@
+name: Astra PR review
+
+on:
+  # Default-branch schedule reads open PR metadata. Fork workflows never receive
+  # the API key; missing/replaced schedule events are recovered by the next scan.
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Optional PR number; does not bypass deduplication or the allowance
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  # Serialize automatic reservations/generations. A scheduled tick must never
+  # replace a maintainer's pending manual pilot in GitHub's concurrency queue.
+  group: astra-automatic-pr-review
+  cancel-in-progress: false
+
+jobs:
+  select:
+    if: github.repository_id == '1187322254' && github.ref == 'refs/heads/main' && vars.ASTRA_AUTOMATIC_REVIEW == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: read
+    outputs:
+      ready: ${{ steps.queue.outputs.ready }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Collect evidence and reserve at most one paid review
+        id: queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASTRA_AUTOMATIC_REVIEW: ${{ vars.ASTRA_AUTOMATIC_REVIEW }}
+          ASTRA_REVIEW_DAILY_LIMIT: ${{ vars.ASTRA_REVIEW_DAILY_LIMIT }}
+          ASTRA_TARGET_PR: ${{ inputs.pull_request }}
+        run: python -m tools.auto_review.automatic select
+      - name: Preserve immutable reservation and source
+        if: steps.queue.outputs.ready == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: astra-pr-input
+          path: review-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  review:
+    needs: select
+    if: needs.select.outputs.ready == 'true' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    environment: astra-review
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: astra-pr-input
+          path: review-evidence/
+      - name: Review immutable data with no publication permission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python -m tools.auto_review.automatic review
+      - name: Show returned findings and coverage gaps
+        if: always()
+        run: python -m tools.auto_review.report
+      - name: Preserve returned and partial evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: astra-pr-result
+          path: review-evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+  publish:
+    needs: [select, review]
+    if: always() && needs.select.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: astra-pr-input
+          path: review-evidence/
+      - name: Fetch result if the worker produced one
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: astra-pr-result
+          path: review-evidence/
+      - name: Recheck current PR and publish advisory or explicit incomplete result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -m tools.auto_review.automatic publish
