@@ -31,6 +31,15 @@ size remains 23: this strengthens an existing case rather than adding duplicate
 flows. Host regressions additionally prove that the original application fails
 the focus, reverse handoff and Windows pause cases.
 
+#109's revised handoff and cleanup implementation passed normal trusted-main
+QEMU [run 39318353840](https://github.com/lab-401/icopy-x/actions/runs/39318353840),
+using build `39317717840` at `8f55e9c010312c676b24bcceb6d7741d7a2debee`.
+Both exact packages passed all 23 cases, with commit and package hashes checked.
+The initial Astra review exposed additional cleanup failures; those were fixed
+and tested before merging. That earlier paid report is not an approval of the
+revised source. The integrated local host suite with the Windows correction
+passes 2,832 tests (12 platform skips).
+
 Keep serial evidence outside caught callbacks when extending these fixtures.
 The handoff tests use real Python threads and deliberately hold result delivery;
 they do not rely on a convenient thread schedule or require a physical port.
