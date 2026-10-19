@@ -9,6 +9,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 from .contract import SCHEMA, validate
+from . import background
 from .errors import ValidationError
 from .snapshots import canonical, digest
 
@@ -42,12 +43,19 @@ def transport_metadata(attempt, headers, status):
         attempt['server_request_id'] = value
 
 
-def send(request, key, timeout, attempt=None):
+def send(request, key, timeout, attempt=None, response_id=None, cancel=False):
+    endpoint = 'https://api.openai.com/v1/responses'
+    if response_id is not None:
+        endpoint += '/' + background.response_id(response_id)
+        if cancel:
+            endpoint += '/cancel'
+    elif cancel or request is None:
+        raise ValueError('Missing response identity')
     headers = {'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'}
     if attempt is not None:
         headers['X-Client-Request-Id'] = attempt['client_request_id']
-    outgoing = Request('https://api.openai.com/v1/responses', data=canonical(request),
-                       headers=headers, method='POST')
+    outgoing = Request(endpoint, data=canonical(request) if request is not None else None,
+                       headers=headers, method='POST' if request is not None or cancel else 'GET')
     try:
         with build_opener(NoRedirect).open(outgoing, timeout=timeout) as response:
             transport_metadata(attempt, response.headers, response.status)
@@ -150,6 +158,7 @@ def review(bundle, policy, key, request_fn=None, max_output_tokens=6000, timeout
     report = dict(status='INCOMPLETE', advisory=True, model_requested=MODEL,
                   snapshot_sha256=digest(bundle), base=bundle['base'], head=bundle['head'],
                   policy_sha256=digest(policy), prompt_format='numbered-source-v3',
+                  transport='background-v1', review_budget_seconds=3 * timeout,
                   attempts=[], calls=[], review=None)
     rendered = numbered_source(bundle)
     instructions = (policy + '\n'
@@ -175,7 +184,7 @@ def review(bundle, policy, key, request_fn=None, max_output_tokens=6000, timeout
         if remaining <= 0:
             report.update(error='TimeoutError', failed_pass=task, failure_stage='deadline', review=previous)
             return report
-        request = dict(model=MODEL, store=False, truncation='disabled',
+        request = dict(model=MODEL, store=False, background=True, truncation='disabled',
             reasoning={'effort': 'high'}, max_output_tokens=max_output_tokens,
             prompt_cache_options={'mode': 'explicit'},
             instructions=instructions,
@@ -200,9 +209,12 @@ def review(bundle, policy, key, request_fn=None, max_output_tokens=6000, timeout
             started = time.monotonic()
             try:
                 response = (request_fn(request, key, attempt['timeout_seconds']) if request_fn else
-                            send(request, key, attempt['timeout_seconds'], attempt=attempt))
+                            background.run(request, key, attempt['timeout_seconds'], attempt, deadline,
+                                send, lambda value: metadata(value, task),
+                                checkpoint=(lambda: checkpoint(report)) if checkpoint else None))
             except (ValueError, OSError, TimeoutError):
-                attempt['outcome'] = 'transport_error'
+                if attempt['outcome'] == 'in_flight':
+                    attempt['outcome'] = 'transport_error'
                 raise
             finally:
                 attempt['elapsed_seconds'] = round(time.monotonic() - started, 3)
@@ -223,6 +235,10 @@ def review(bundle, policy, key, request_fn=None, max_output_tokens=6000, timeout
             # Keep attempted requests, returned accounting and the last validated proposal, but
             # never promote a partial review or retry a potentially billed call.
             report.update(error=type(error).__name__, failed_pass=task, failure_stage=stage, review=previous)
+            if isinstance(error, background.ReviewDeadline):
+                report['failure_stage'] = 'deadline'
+            if isinstance(error, background.CheckpointError):
+                report['failure_stage'] = 'checkpoint'
             if stage == 'checkpoint' and attempt['outcome'] == 'in_flight':
                 attempt['outcome'] = 'not_sent'
             if isinstance(error, ValidationError):

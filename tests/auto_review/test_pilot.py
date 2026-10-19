@@ -50,7 +50,7 @@ class PilotTests(unittest.TestCase):
                 validation='source_confirmed')], required_device_checks=[], limitations=[])
 
     def response(self, value=None):
-        return dict(id='resp_fixture', model=reviewer.MODEL, status='completed', error=None,
+        return dict(id='resp_fixture', model=reviewer.MODEL, status='completed', background=True, error=None,
                     incomplete_details=None, usage={'input_tokens': 10, 'output_tokens': 10},
                     output=[dict(type='message', role='assistant', status='completed',
                                  content=[dict(type='output_text', text=json.dumps(value or self.valid()))])])
@@ -310,7 +310,7 @@ class PilotTests(unittest.TestCase):
         bundle = self.bundle()
         with patch.object(reviewer.time, 'monotonic', side_effect=[0, 1, 2, 9]), \
                 patch.object(reviewer, 'send', side_effect=TimeoutError('private response')) as send:
-            report = reviewer.review(bundle, 'policy', 'fixture-key')
+            report = reviewer.review(bundle, 'policy', 'fixture-key', request_fn=send)
         self.assertEqual(send.call_count, 1)
         self.assertEqual(report['calls'], [])
         self.assertEqual(report['error'], 'TimeoutError')
@@ -323,10 +323,10 @@ class PilotTests(unittest.TestCase):
         self.assertNotIn('usage', attempt)
         self.assertNotIn('fixture-key', json.dumps(report))
         self.assertNotIn('private response', json.dumps(report))
-        self.assertEqual(send.call_args.kwargs['attempt'], attempt)
+        self.assertEqual(send.call_args.args[2], attempt['timeout_seconds'])
 
     def test_second_timeout_preserves_validated_review_and_returned_usage(self):
-        with patch.object(reviewer, 'send', side_effect=[self.response(), TimeoutError()]):
+        with patch.object(reviewer, 'send', side_effect=[self.response(), TimeoutError()]) as send:
             report = reviewer.review(self.bundle(), 'policy', 'fixture-key')
         self.assertEqual(report['status'], 'INCOMPLETE')
         self.assertEqual(report['review'], self.valid())
@@ -337,6 +337,32 @@ class PilotTests(unittest.TestCase):
         self.assertEqual(second['outcome'], 'transport_error')
         self.assertEqual(report['calls'][0]['client_request_id'], first['client_request_id'])
         self.assertEqual(report['calls'][0]['usage']['input_tokens'], 10)
+        self.assertEqual(send.call_count, 2)
+        self.assertEqual(first['terminal_response']['usage']['input_tokens'], 10)
+        self.assertEqual(second['cleanup']['outcome'], 'unknown_response')
+
+    def test_background_three_passes_validate_final_objects_and_stop_on_refusal(self):
+        pending = dict(self.response(), status='queued', output=[], usage=None)
+        with patch.object(reviewer, 'send', side_effect=[pending, self.response()] * 3) as send, \
+                patch.object(reviewer.background.time, 'sleep'):
+            report = reviewer.review(self.bundle(), 'policy', 'fixture-key')
+        self.assertEqual(report['status'], 'ADVISORY_COMPLETE')
+        self.assertEqual(report['transport'], 'background-v1')
+        self.assertEqual(report['review_budget_seconds'], 360)
+        self.assertEqual(len(report['attempts']), 3)
+        self.assertEqual(len(report['calls']), 3)
+        self.assertEqual(send.call_count, 6)
+        self.assertTrue(all(attempt['poll_count'] == 1 for attempt in report['attempts']))
+        refusal = self.response()
+        refusal['output'][0]['content'] = [dict(type='refusal', refusal='private refusal')]
+        with patch.object(reviewer, 'send', side_effect=[self.response(), refusal]) as send:
+            report = reviewer.review(self.bundle(), 'policy', 'fixture-key')
+        self.assertEqual(report['status'], 'INCOMPLETE')
+        self.assertEqual(report['validation_code'], 'response_refusal')
+        self.assertEqual(report['review'], self.valid())
+        self.assertEqual(len(report['calls']), 2)
+        self.assertEqual(send.call_count, 2)
+        self.assertNotIn('private refusal', json.dumps(report))
 
     def test_request_budget_prevents_attempt_and_checkpoint_failure_prevents_send(self):
         bundle = self.bundle()
