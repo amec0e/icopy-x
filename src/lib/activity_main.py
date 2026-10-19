@@ -43,6 +43,7 @@ Import convention: ``from lib.activity_main import BacklightActivity`` etc.
 
 import logging
 import os
+import queue
 import shutil
 
 from lib.actbase import BaseActivity
@@ -8241,6 +8242,9 @@ class IClassSEActivity(BaseActivity):
 
     def __init__(self, bundle=None):
         self._ser = None
+        self._decoder_session = None
+        self._discovery_results = queue.Queue()
+        self._discovery_timer = None
         self._state = self.STATE_READING
         self._poll_timer = None
         self._target_poll_timer = None
@@ -8270,10 +8274,7 @@ class IClassSEActivity(BaseActivity):
         self._ser = None
         self._render_detecting_state()
 
-        # Run decoder detection in background thread to avoid UI blocking
-        import threading
-        self._detect_thread = threading.Thread(target=self._detect_decoder_bg, daemon=True)
-        self._detect_thread.start()
+        self._start_decoder_discovery()
 
     def _render_detecting_state(self):
         """Render 'Searching for decoder...' state."""
@@ -8292,28 +8293,69 @@ class IClassSEActivity(BaseActivity):
             tags='_ics_status',
         )
 
-    def _detect_decoder_bg(self):
-        """Background thread for decoder detection."""
+    def _cancel_decoder_session(self):
+        if self._discovery_timer is not None:
+            self.getCanvas().after_cancel(self._discovery_timer)
+            self._discovery_timer = None
+        session = self._decoder_session
+        if session is not None:
+            owned = session.owns(self._ser)
+            try:
+                closed = session.cancel()
+            except Exception:
+                if owned:
+                    self._ser = None  # Cleanup must stay with the recoverable owner.
+                logger.exception('Could not close ICS Decoder session')
+                return False
+            if self._ser is closed:
+                self._ser = None
+            self._decoder_session = None
+        return True
+
+    def _start_decoder_discovery(self, generation=None):
+        import threading
+        import ics_decoder
+        self._decoder_session = ics_decoder.DecoderSession()
+        self._discovery_timer = self.getCanvas().after(50, self._poll_discovery_results)
+        self._detect_thread = threading.Thread(target=self._detect_decoder_bg,
+            args=(self._decoder_session, generation), daemon=True)
+        self._detect_thread.start()
+
+    def _detect_decoder_bg(self, session, generation):
+        """Workers publish Python data only; Tk owns delivery and rendering."""
         try:
-            import ics_decoder
-            ser = ics_decoder.detect_decoder()
-            # Pass result back to main thread
-            from lib import actstack
-            if actstack._root is not None:
-                actstack._root.after(0, self._on_decoder_found, ser)
-            else:
-                self._on_decoder_found(ser)
-        except Exception as e:
-            # Log error and pass None to main thread
+            ser = session.detect()
+        except Exception:
+            logger.exception('ICS Decoder discovery failed')
+            ser = None
+        self._discovery_results.put((session, ser, generation))
+
+    def _poll_discovery_results(self):
+        self._discovery_timer = None
+        if self._state == self.STATE_DESTROYED or self._decoder_session is None:
+            return
+        while not self._discovery_results.empty():
+            session, ser, generation = self._discovery_results.get_nowait()
+            if session is self._decoder_session:
+                self._on_decoder_found(ser, generation)
+                return
+            # Back/retry already cancelled this session; failed cleanup is
+            # retained by middleware, independent of this queue or canvas.
+        self._discovery_timer = self.getCanvas().after(50, self._poll_discovery_results)
+
+    def _close_unowned_decoder(self):
+        if self._ser is not None:
             try:
                 import ics_decoder
-                ics_decoder._log('DETECT_THREAD_ERROR: {}'.format(e))
+                ics_decoder.close_decoder(self._ser)
             except Exception:
-                pass
-            self._on_decoder_found(None)
+                logger.exception('Could not close ICS Decoder handle')
+            self._ser = None
 
-    def _on_decoder_found(self, ser):
+    def _on_decoder_found(self, ser, generation=None):
         """Called on main thread after decoder detection completes."""
+        if self._state == self.STATE_DESTROYED:
+            return  # onDestroy cancelled the session, including pending handles.
         try:
             if ser is None:
                 # No decoder found - show error state
@@ -8932,15 +8974,11 @@ class IClassSEActivity(BaseActivity):
     def onDestroy(self):
         # Mark as destroyed FIRST to stop all polling/background work
         self._state = self.STATE_DESTROYED
+        self._cancel_decoder_session()
         self._stop_poll()
         self._stop_target_poll()
-        # Close serial port safely without blocking
-        if self._ser is not None:
-            try:
-                self._ser.close()
-            except Exception:
-                pass
-            self._ser = None
+        # Legacy/manual handles also use the shared cleanup reservation.
+        self._close_unowned_decoder()
         super().onDestroy()
 
 
@@ -9865,15 +9903,12 @@ class ICSDecoderActivity(IClassSEActivity):
         ])
 
     def _start_read(self):
-        import threading
+        if not self._cancel_decoder_session():
+            return
         self._hide_menu()
         self._stop_poll()
         self._stop_target_poll()
-        if self._ser is not None:
-            try:
-                self._ser.close()
-            except Exception:
-                pass
+        self._close_unowned_decoder()
         self._read_generation += 1
         self._read_in_flight = False
         self._ser = None
@@ -9881,34 +9916,14 @@ class ICSDecoderActivity(IClassSEActivity):
         self._state = self.STATE_DETECTING
         self.setTitle('iCS Decoder')
         self._render_detecting_state()
-        self._detect_thread = threading.Thread(
-            target=self._detect_decoder_bg, args=(self._read_generation,), daemon=True)
-        self._detect_thread.start()
-
-    def _detect_decoder_bg(self, generation):
-        try:
-            import ics_decoder
-            ser = ics_decoder.detect_decoder()
-        except Exception:
-            ser = None
-        from lib import actstack
-        if actstack._root is not None:
-            try:
-                actstack._root.after(0, self._on_decoder_found, ser, generation)
-            except Exception:
-                if ser is not None:
-                    try:
-                        ser.close()
-                    except Exception:
-                        pass
-        else:
-            self._on_decoder_found(ser, generation)
+        self._start_decoder_discovery(self._read_generation)
 
     def _on_decoder_found(self, ser, generation):
         if generation != self._read_generation or self._state != self.STATE_DETECTING:
             if ser is not None:
                 try:
-                    ser.close()
+                    import ics_decoder
+                    ics_decoder.close_decoder(ser)
                 except Exception:
                     pass
             return
@@ -10172,15 +10187,11 @@ class ICSDecoderActivity(IClassSEActivity):
             self.finish()
         elif state in (self.STATE_DETECTING, self.STATE_READING):
             self._read_generation += 1
+            self._cancel_decoder_session()
             self._read_in_flight = False
             self._stop_poll()
             self._state = self.STATE_HOME
-            if self._ser is not None:
-                try:
-                    self._ser.close()
-                except Exception:
-                    pass
-                self._ser = None
+            self._close_unowned_decoder()
             self._show_home()
         elif state in (self.STATE_DECODED, self.STATE_SAVED):
             self._show_home()

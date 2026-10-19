@@ -61,6 +61,8 @@ def activity_stack():
     actstack._reset()
     actstack._canvas_factory = lambda: MockCanvas()
     yield
+    for activity in list(actstack._ACTIVITY_STACK):
+        activity.onDestroy()
     actstack._reset()
 
 
@@ -362,7 +364,7 @@ def test_decode_and_details_never_start_target_poll(store, monkeypatch):
 def test_live_read_callback_stops_on_results_without_blank_poll(store, monkeypatch):
     activity = start()
     activity._state = activity.STATE_READING
-    activity._ser = object()
+    activity._ser = ScriptedSerial([])
     monkeypatch.setattr(ics_decoder, 'read_card', lambda serial: captured())
     calls = []
     monkeypatch.setattr(activity, '_start_target_poll', lambda: calls.append('poll'))
@@ -754,15 +756,22 @@ def test_old_decoder_detection_cannot_claim_restarted_read(store, monkeypatch):
     activity._start_read()
     assert activity._read_generation != first_generation
     assert activity._state == activity.STATE_DETECTING
-    stale, current = Port(), Port()
-    ports = iter([stale, current])
-    monkeypatch.setattr(ics_decoder, 'detect_decoder', lambda: next(ports))
+    current = Port()
+    opened = []
+
+    def detect(**kwargs):
+        opened.append(current)
+        return current
+
+    monkeypatch.setattr(ics_decoder, 'detect_decoder', detect)
     jobs[0][0](*jobs[0][1])
-    assert stale.closed
+    assert opened == []  # cancelled before discovery; never open a stale session
     assert activity._state == activity.STATE_DETECTING
     assert activity._ser is None
     jobs[1][0](*jobs[1][1])
+    assert opened == [current]
     assert not current.closed
+    activity.getCanvas().advance(50)
     assert activity._state == activity.STATE_READING
     assert activity._ser is current
     activity._on_decoder_found(None, first_generation)
