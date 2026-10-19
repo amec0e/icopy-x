@@ -1,4 +1,7 @@
 """Strict output shape and source-bound evidence validation."""
+from .errors import ValidationError
+
+
 def obj(properties):
     return dict(type='object', properties=properties, required=list(properties), additionalProperties=False)
 
@@ -26,21 +29,21 @@ def shape(value, schema):
     kind = schema['type']
     expected = {'object': dict, 'array': list, 'string': str, 'integer': int, 'boolean': bool}[kind]
     if type(value) is not expected:
-        raise ValueError('Invalid review field type')
+        raise ValidationError('field_type')
     if 'enum' in schema and value not in schema['enum']:
-        raise ValueError('Invalid review enum')
+        raise ValidationError('field_enum')
     if kind == 'object':
         if set(value) != set(schema['properties']):
-            raise ValueError('Missing or extra review fields')
+            raise ValidationError('field_set')
         for key, child in value.items():
             shape(child, schema['properties'][key])
     elif kind == 'array':
         if len(value) > 500:
-            raise ValueError('Review array exceeds limit')
+            raise ValidationError('array_limit')
         for child in value:
             shape(child, schema['items'])
     elif kind == 'string' and (not value.strip() or len(value) > 8000):
-        raise ValueError('Empty or oversized review text')
+        raise ValidationError('text_limit')
 
 
 def validate(review, bundle):
@@ -49,16 +52,16 @@ def validate(review, bundle):
     required = {path for path, row in inventory.items() if row['changed']}
     actual = [row['path'] for row in review['files']]
     if len(actual) != len(set(actual)) or set(actual) != required:
-        raise ValueError('Review coverage does not match changed-file inventory')
+        raise ValidationError('file_coverage')
     if review['completion'] == 'complete' and (
             bundle['gaps'] or not all(row['reviewed'] for row in review['files'])):
-        raise ValueError('Incomplete coverage cannot be reported complete')
+        raise ValidationError('incomplete_coverage')
     for finding in review['findings']:
         source = inventory.get(finding['path'], {}).get(finding['side'])
         if not source or 'text' not in source:
-            raise ValueError('Finding references unavailable source')
+            raise ValidationError('source_unavailable')
         lines = source['text'].splitlines()
         line = finding['line']
         if not 1 <= line <= len(lines) or finding['quote'].strip() != lines[line - 1].strip():
-            raise ValueError('Finding line/quote does not match immutable source')
+            raise ValidationError('source_citation')
     return review
