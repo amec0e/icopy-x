@@ -150,6 +150,46 @@ def test_menu_probe_releases_port_before_activity_can_open_it(usb):
     activity_handles[0].close()
 
 
+def test_successful_presence_probe_keeps_ownership_until_close(usb, monkeypatch):
+    """Successful discovery must serialize cleanup as well as the handshake."""
+    closing, release_close = threading.Event(), threading.Event()
+    original_open = decoder._open_serial
+    results = []
+
+    def open_port(path):
+        handle = original_open(path)
+        original_close = handle.close
+
+        def close():
+            closing.set()
+            assert release_close.wait(3)
+            original_close()
+
+        handle.close = close
+        return handle
+
+    monkeypatch.setattr(decoder, '_open_serial', open_port)
+    usb.ports['/dev/ttyACM1'] = {'reply': b'ISE\r\n'}
+    presence = decoder.DecoderPresence()
+    worker = threading.Thread(target=lambda: results.append(presence.check(lambda: False)))
+    try:
+        worker.start()
+        assert closing.wait(3)
+        # This is the lock the reading activity acquires before opening a port.
+        # Trying from another thread makes the former gap deterministic: the
+        # handshake has returned but the presence handle has not closed yet.
+        acquired = decoder._detection_lock.acquire(blocking=False)
+        if acquired:
+            decoder._detection_lock.release()
+        assert not acquired, 'Reading activity could open the still-owned probe port'
+    finally:
+        release_close.set()
+        worker.join(3)
+    assert not worker.is_alive()
+    assert results == [True]
+    assert usb.handles[0].closed
+
+
 @pytest.mark.parametrize('enumeration', [None, lambda: [],
     lambda: (_ for _ in ()).throw(OSError('enumeration unavailable'))])
 def test_windows_enumeration_failure_never_guesses_ports(usb, monkeypatch, enumeration):

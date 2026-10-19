@@ -37,7 +37,9 @@ _READLINE_TIMEOUT = 1.2  # USB CDC ACM needs >=1.0s for reliable WHO response
 # src/main/main.py and pm3_flash.py reserve this port for the internal PM3.
 # Sending the accessory handshake to it can disturb the running PM3 client.
 _PM3_PORT = '/dev/ttyACM0'
-_detection_lock = threading.Lock()
+# Presence checks retain this lock through closing the temporary handle, while
+# reusing detect_decoder's guarded handshake on the same thread.
+_detection_lock = threading.RLock()
 _ICLASS_KEYS = ('AFA785A7DAB33378', '2020666666668888')
 _ANSI_ESCAPE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
 _PM3_FAILURE = re.compile(
@@ -262,12 +264,16 @@ class DecoderPresence:
                 return True
             if attempts >= 3:
                 continue
-            ser = detect_decoder([port], cancelled=cancelled, quiet=True)
-            try:
-                present = ser is not None
-            finally:
-                if ser is not None:
-                    ser.close()
+            # Keep the handoff atomic: detect_decoder normally transfers an
+            # open handle to its caller, but a menu probe must finish closing
+            # that handle before a reading activity can open the same port.
+            with _detection_lock:
+                ser = detect_decoder([port], cancelled=cancelled, quiet=True)
+                try:
+                    present = ser is not None
+                finally:
+                    if ser is not None:
+                        ser.close()
             if cancelled():
                 return False
             self._attachments[identity] = (present, attempts + 1)
