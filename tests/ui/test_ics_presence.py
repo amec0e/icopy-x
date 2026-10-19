@@ -396,6 +396,24 @@ def test_windows_same_com_replacement_requires_new_identity_handshake(windows_us
     assert all(handle.closed for handle in windows_usb.handles)
 
 
+def test_windows_resume_respects_foreground_handle_before_revalidation(windows_usb):
+    presence = decoder.DecoderPresence()
+    assert presence.check(lambda: False, observation=object())
+    session = decoder.DecoderSession()
+    resumed = object()
+    try:
+        assert session.detect() is windows_usb.handles[1]
+        assert not presence.check(lambda: False, observation=resumed)
+        assert len(windows_usb.opened) == 2
+        assert not windows_usb.handles[1].closed
+    finally:
+        session.cancel()
+    windows_usb.ports['COM7']['reply'] = b'other\r\n'
+    assert not presence.check(lambda: False, observation=resumed)
+    assert len(windows_usb.opened) == 3
+    assert all(handle.closed for handle in windows_usb.handles)
+
+
 def test_windows_pause_invalidates_positive_even_with_identical_metadata(windows_usb):
     presence = decoder.DecoderPresence()
     observation = object()

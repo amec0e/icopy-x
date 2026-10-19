@@ -10,8 +10,8 @@ translation, build scripts and the existing user-facing menu contents.
 | --- | --- | --- |
 | Swallowed QEMU assertion, [#107](https://github.com/lab-401/icopy-x/pull/107) | Record attempted opens and serial contract violations before raising simulated I/O errors. Assert that evidence outside application exception handlers. | Six controls include disabling the actual PM3 opening guard. The application catches the simulated error, but the evidence still fails. |
 | Menu focus, [#108](https://github.com/lab-401/icopy-x/pull/108) | Hide the stale row on return; restore its selection after positive revalidation only if the user has not navigated. A negative result discards restoration intent. | Connected return fails against the old application. Four host cases cover restoration, removal and navigation priority; the ARM/Tk hotplug case now includes pause/resume. |
-| Foreground serial handoff, [#109](https://github.com/lab-401/icopy-x/pull/109) | A cancellable session owns the handle through queued UI delivery and reading. Other discovery cannot open until cleanup completes. Both foreground activity paths participate. | Holding Tk delivery exposes a second open in the old application. Five activity/thread cases and four middleware cases cover pending delivery, Back/destroy, late callbacks, enqueue failure, cancellation windows and failed close. |
-| Windows attachment continuity, this change | Optional USB metadata distinguishes replacements; a new menu observation period invalidates cached successes and exhausted retries after a pause. | Both real menu/presence scenarios fail against the old code: replacing a confirmed decoder and reconnecting after exhausted attempts on the same COM name. Ten added cases also cover missing metadata, enumeration errors, cancelled observations and unchanged Linux behavior. |
+| Foreground serial handoff, [#109](https://github.com/lab-401/icopy-x/pull/109) | A cancellable session owns the handle through queued UI delivery and reading. Discovery workers publish Python data; a Tk-owned timer delivers it. Failed cleanup retains ownership and remains recoverable after the activity exits. | Holding delivery exposes a second open in the old application. Ten activity/thread cases and eight middleware cases cover both entry paths, Back/destroy, cancellation windows, UI thread affinity, lost references and bounded failed-close recovery. |
+| Windows attachment continuity, this change | Optional USB metadata distinguishes replacements; a new menu observation period invalidates cached successes and exhausted retries after a pause. | Both real menu/presence scenarios fail against the old code: replacing a confirmed decoder and reconnecting after exhausted attempts on the same COM name. Eleven added cases also cover missing metadata, enumeration errors, cancelled observations, foreground ownership and unchanged Linux behavior. |
 
 ## QEMU evidence and test maintenance
 
@@ -53,6 +53,9 @@ identical metadata occurring entirely between uninterrupted enumeration polls
 is not observable by this cache. Pause/resume now explicitly invalidates that
 uncertain continuity. Linux retains its devnode inode/ctime checks. A serial
 close failure retains ownership; failed cleanup must not permit a new open.
+Background cleanup stops after three failed close attempts; a user-initiated
+read can retry cleanup afterward. The discovery queue changes do not establish
+thread safety for the separate legacy read/write workers.
 
 When an ICS accessory becomes available:
 
