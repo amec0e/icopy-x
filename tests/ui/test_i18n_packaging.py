@@ -110,8 +110,8 @@ def _isolate_to_data_only(mod, monkeypatch, data_dir, empty_dir):
     """Point every source root at an empty dir except DATA_DIR.
 
     The other collectors guard on os.path.isdir / os.path.exists and return
-    nothing, so the built IPK contains only what comes from data_dir (plus
-    the build-version stamp).  This keeps the test hermetic and fast.
+    nothing. The caller supplies the required factory client/Lua pair, so
+    the archive adds only those inputs and the version stamp to the data.
     """
     monkeypatch.setattr(mod, "DATA_DIR", data_dir)
     for attr in ("REPO_ROOT", "SRC_LIB", "SRC_MIDDLEWARE", "SRC_SCREENS",
@@ -124,6 +124,11 @@ def _built_namelist(mod, monkeypatch, tmp_path, data_dir):
     empty_dir = str(tmp_path / "empty")
     os.makedirs(empty_dir, exist_ok=True)
     _isolate_to_data_only(mod, monkeypatch, data_dir, empty_dir)
+    artifact_dir = tmp_path / "build"
+    artifact_dir.mkdir()
+    for name in ("factory_proxmark3", "factory_lua.zip"):
+        (artifact_dir / name).write_bytes(name.encode())
+    monkeypatch.setattr(mod, "BUILD_DIR", str(artifact_dir))
 
     out_ipk = str(tmp_path / "out.ipk")
     ok = mod.build_ipk(out_ipk, serial_number="UNIVERSAL", dry_run=False,

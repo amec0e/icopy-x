@@ -1,5 +1,6 @@
 """Check package variant boundaries with tiny, distinguishable fixtures."""
 import importlib.util
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -57,3 +58,46 @@ def test_package_keeps_matching_client_lua_and_firmware_boundary(builder, monkey
         prefix = '' if flash else 'factory_'
         assert package.read('pm3/proxmark3') == (prefix + 'proxmark3').encode()
         assert package.read('pm3/lua.zip') == (prefix + 'lua.zip').encode()
+
+
+@pytest.mark.parametrize('missing', ['proxmark3', 'lua.zip', 'factory_proxmark3', 'factory_lua.zip'])
+@pytest.mark.parametrize('damage', ['absent', 'empty', 'directory'])
+@pytest.mark.parametrize('existing_output', [False, True])
+def test_cli_rejects_incomplete_pair_before_touching_output(
+        builder, monkeypatch, tmp_path, capsys, missing, damage, existing_output):
+    artifacts = tmp_path / 'build'
+    artifacts.mkdir()
+    monkeypatch.setattr(builder, 'BUILD_DIR', str(artifacts))
+    for name in ('proxmark3', 'lua.zip', 'factory_proxmark3', 'factory_lua.zip'):
+        path = artifacts / name
+        if name != missing:
+            path.write_bytes(name.encode())
+        elif damage == 'empty':
+            path.touch()
+        elif damage == 'directory':
+            path.mkdir()
+    output = tmp_path / 'result.ipk'
+    if existing_output:
+        output.write_bytes(b'previous package')
+    args = ['build_ipk.py', '--no-trojan', '--output', str(output)]
+    if missing.startswith('factory_'):
+        args.append('--no-flash')
+    monkeypatch.setattr(sys, 'argv', args)
+    with pytest.raises(SystemExit) as exit_info:
+        builder.main()
+    assert exit_info.value.code == 1
+    assert 'ERROR:' in capsys.readouterr().out
+    if existing_output:
+        assert output.read_bytes() == b'previous package'
+    else:
+        assert not output.exists()
+
+
+@pytest.mark.parametrize('flash', [False, True])
+def test_collection_only_requires_the_selected_family(builder, monkeypatch, tmp_path, flash):
+    monkeypatch.setattr(builder, 'BUILD_DIR', str(tmp_path))
+    prefix = '' if flash else 'factory_'
+    for name in ('proxmark3', 'lua.zip'):
+        (tmp_path / (prefix + name)).write_bytes(name.encode())
+    pairs = builder.collect_build_binaries('UNIVERSAL', include_flash=flash)
+    assert {destination for _, destination in pairs} == {'pm3/proxmark3', 'pm3/lua.zip'}
