@@ -14,6 +14,16 @@ as part of unrelated work. Do not commit build outputs, private device logs,
 badge dumps or local agent history. Put feature details under `docs/` and keep
 the README a project entry point.
 
+Device menus and screens must serve a user task or a diagnostic purpose. Do not
+add contributor-specific About/credits submenus, contributor handles, personal
+branding or promotional links to feature screens. Keep contributor attribution
+in source comments, Git history and GitHub. Preserve required copyright/license
+notices and useful device, firmware-version and support information; a screen
+named About is not by itself a violation. Review actual content and navigation,
+including translations, screen definitions, assets and tests that expect credits.
+Passing tests do not justify UI without user value. This rule also applies to
+the planned automated reviewer.
+
 ## Practical contributor checks
 
 Run the host suite without a device or QEMU image:

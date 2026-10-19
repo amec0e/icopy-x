@@ -16,6 +16,8 @@ import sys
 import termios
 import time
 
+from screen import require_screen
+
 ROOT = Path('/home/pi/icopy-validation')  # root filesystem survives USB handover
 LIVE = Path('/home/pi/ipk_app_main')
 DUMPS = Path('/mnt/upan/dump')
@@ -93,11 +95,6 @@ def texts():
             'send', 'tk', root.tk.call('list', 'apply', ('', script)))))
     finally:
         root.destroy()
-
-
-def require_screen(expected, observed):
-    if not expected or not all(text in observed for text in expected):
-        raise ValueError('Unexpected screen; no key sent')
 
 
 def inject(key):

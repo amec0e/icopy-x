@@ -18,6 +18,7 @@ import uuid  # noqa: F401 - initialize stdlib's real `uname -p` probe before pro
 from strict_transport import Transcript, ConnectionTranscript
 from recovery_transport import RecoveryTranscript
 import ultralight_cases
+import decoder_menu_case
 
 
 PROFILE = json.loads(Path(__file__).with_name('critical_cases.json').read_text())
@@ -59,7 +60,7 @@ def run(root, output, variant, callback_errors):
                                  'read.Reader: dispatch observer in scan cases; real in reader_* cases',
                                  'HMI abort: release the held transport response',
                                  'audio playback: silent sink',
-                                 'decoder serial enumeration: empty inventory'],
+                                 'decoder serial: empty inventory or scripted Who/ISE hotplug fixture'],
                   forbidden_operations='unscripted transport, serial open, subprocess, os.system')
 
     def save():
@@ -254,6 +255,9 @@ def run(root, output, variant, callback_errors):
                     assert actstack.get_current_activity() is activity
                     assert activity._state == activity.STATE_HOME
                     assert 'Read Credential' in visible_text(activity)
+                elif name == 'decoder_menu_hotplug':
+                    decoder_menu_case.run(main, root, pump)
+                    activity = main
                 elif mfu:
                     is_auto = name == 'mfu_auto_partial'
                     activity = (actstack.start_activity(activity_main.AutoCopyActivity) if is_auto else
