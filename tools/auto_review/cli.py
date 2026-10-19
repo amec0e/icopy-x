@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 from .reviewer import review
+from .profiles import PROFILES, select
 from .snapshots import canonical, collect, digest
 
 
@@ -23,6 +24,7 @@ def main(argv=None):
     parser.add_argument('--base', required=True)
     parser.add_argument('--head', required=True)
     parser.add_argument('--context', action='append', default=[])
+    parser.add_argument('--profile', choices=tuple(PROFILES), default='manual')
     parser.add_argument('--search', action='append', default=[], help='Literal reference term, not a regex')
     parser.add_argument('--purpose', default='', help='Stated PR outcome; treated as untrusted context')
     parser.add_argument('--output', required=True, type=Path)
@@ -38,8 +40,11 @@ def main(argv=None):
     try:
         if len(args.purpose) > 8000 or (args.operation == 'review' and not args.purpose.strip()):
             raise ValueError('Review requires a bounded statement of the intended PR outcome')
-        bundle = collect(args.repo, args.base, args.head, args.context, args.max_bytes, args.max_file_bytes,
-                         searches=args.search)
+        context, searches, selection = select(args.profile, args.context, args.search)
+        bundle = collect(args.repo, args.base, args.head, context, args.max_bytes, args.max_file_bytes,
+                         searches=searches)
+        if selection is not None:
+            bundle['context_selection'] = selection
         bundle['stated_purpose'] = args.purpose
         budget_gap = 'serialized bundle exceeds input budget'
         if len(canonical(bundle)) > args.max_bytes and not any(g['reason'] == budget_gap for g in bundle['gaps']):

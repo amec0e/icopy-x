@@ -125,9 +125,15 @@ def numbered_source(bundle):
     """Render citation addresses without modifying the immutable evidence."""
     rendered = deepcopy(bundle)
     for row in rendered['files']:
+        identical = (not row['changed'] and row['base'] is not None and
+                     'text' in row['base'] and row['base'] == row['head'])
         for side in ('base', 'head'):
             source = row[side]
             if source and 'text' in source:
+                if side == 'head' and identical:
+                    source.pop('text')
+                    source['numbered_source_ref'] = dict(path=row['path'], side='base')
+                    continue
                 source['numbered_text'] = '\n'.join(
                     '{}\t{}'.format(number, line)
                     for number, line in enumerate(source.pop('text').splitlines(), 1))
@@ -143,7 +149,7 @@ def review(bundle, policy, key, request_fn=None, max_output_tokens=6000, timeout
         raise ValueError('Review limits outside allowed range')
     report = dict(status='INCOMPLETE', advisory=True, model_requested=MODEL,
                   snapshot_sha256=digest(bundle), base=bundle['base'], head=bundle['head'],
-                  policy_sha256=digest(policy), prompt_format='numbered-source-v2',
+                  policy_sha256=digest(policy), prompt_format='numbered-source-v3',
                   attempts=[], calls=[], review=None)
     rendered = numbered_source(bundle)
     instructions = (policy + '\n'
@@ -151,6 +157,8 @@ def review(bundle, policy, key, request_fn=None, max_output_tokens=6000, timeout
         'Do not execute code or claim tests/hardware were run. Review only supplied evidence. '
         'Classify every changed path exactly once; do not list unchanged context in files. '
         'Each numbered_text line has a 1-based source line number, a tab, then the original line. '
+        'An unchanged head with numbered_source_ref has exactly the same full source and line '
+        'numbers as that path on base; use that source for either side. Metadata remains on both sides. '
         'Use that number for citations and copy only the original line into quote '
         '(one line, no ellipsis, excluding the number and separator). '
         'Complete means the supplied change was reviewed, never merge approval. '

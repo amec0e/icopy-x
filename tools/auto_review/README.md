@@ -27,6 +27,18 @@ Start with `prepare` to inspect `snapshot.json`, the complete changed-file list,
 coverage gaps and any explicitly selected unchanged caller/contract files. The
 `context` input is a JSON array, e.g. `["src/lib/actmain.py"]`. Choose context after
 reading the change; the collector does not autonomously discover dependencies.
+The optional `profile` input selects a trusted starting point: `ics-ui` includes
+the actual information view, menu/widget contracts and activity tests;
+`ics-transport` includes discovery, foreground callers, PM3 reservation and
+transport tests; `accessory-menu` includes startup, activity lifecycle and
+presence tests. `manual` remains the default and preserves existing snapshots.
+Profiles are maintained in [profiles.py](profiles.py), with a reason for each
+path. They are opt-in: a change anywhere in the large activity module does not
+automatically select ICS context. Explicit `context` and `searches` are added
+to the profile. The snapshot records the profile version and selection reasons.
+Missing paths, unsupported blobs and exceeded budgets fail closed; a profile
+never silently drops context. Inspect the prepared inventory and reference hits:
+these recipes do not prove a complete dependency graph or replace reading callers.
 Then run `review` with the same identities/context. Download the run artifact.
 The optional `searches` input is a JSON array of literal reference terms, e.g.
 `["menu_order", "ordered_items", "main_menu.json"]`. It searches both immutable
@@ -108,6 +120,12 @@ The three passes share a stable policy/schema/source prefix with an explicit
 cache breakpoint after the source. The pass instruction and untrusted previous
 proposal follow that prefix. This allows reuse without caching each changing
 suffix; it does not guarantee a cache hit or reduce the three-pass evidence checks.
+In `numbered-source-v3`, identical unchanged base/head blobs are rendered once
+on base. Head retains its metadata and a `numbered_source_ref` to that same
+path's base lines. Changed files keep both sides explicit. This removes duplicate
+prompt text without dropping any source lines or changing `snapshot.json`, its
+hashes, citation validation or the existing snapshot/request byte limits. It is
+not evidence that request size caused an earlier transport timeout.
 Compare recorded cached and cache-write tokens in live trials. See the
 [API prompt caching guide](https://developers.openai.com/api/docs/guides/prompt-caching).
 
@@ -132,11 +150,11 @@ positives, scope decisions, context gaps, token usage and latency. A response
 matching the JSON schema is not evidence that its reasoning is correct. The
 [calibration corpus](calibration/README.md) preserves predeclared cases,
 source-based assessments and final live reports. It is maintained separately
-from ordinary contributor tests. Context selection and automatic PR integration
+from ordinary contributor tests. Automatic dependency discovery and PR integration
 remain follow-up work; semantic quality cannot be inferred from schema validity.
 
 For an optional local run, use `python -m tools.auto_review.cli prepare` or
-`review` with `--repo`, `--base`, `--head`, `--purpose`, repeated `--context` and
+`review` with `--repo`, `--base`, `--head`, `--purpose`, optional `--profile`, repeated `--context` and
 `--search=literal` arguments, and a new `--output`
 directory. Only a local `review` needs `OPENAI_API_KEY` in its process environment.
 Do not commit keys or private physical-device evidence. The hosted artifacts

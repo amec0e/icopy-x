@@ -7,7 +7,7 @@ from urllib.error import HTTPError
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-from tools.auto_review import cli, contract, hosted, reviewer, snapshots
+from tools.auto_review import cli, contract, hosted, profiles, reviewer, snapshots
 
 
 class PilotTests(unittest.TestCase):
@@ -451,6 +451,80 @@ class PilotTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'line/quote'):
             contract.validate(valid, bundle)
 
+    def test_unchanged_context_shares_source_without_changing_citation_evidence(self):
+        self.write('context.py', '# Unicode: \u00e9\n\n\tpass\n')
+        self.base = self.commit()
+        self.write('feature.py', 'def menu():\n    return ["Read", "Contributor About", "More"]\n')
+        self.head = self.commit()
+        bundle = self.bundle(context=['context.py'])
+        before = snapshots.canonical(bundle)
+        rendered = reviewer.numbered_source(bundle)
+        context = next(row for row in rendered['files'] if row['path'] == 'context.py')
+        self.assertEqual(context['base']['numbered_text'], '1\t# Unicode: \u00e9\n2\t\n3\t\tpass')
+        self.assertNotIn('text', context['head'])
+        self.assertNotIn('numbered_text', context['head'])
+        self.assertEqual(context['head']['numbered_source_ref'], {'path': 'context.py', 'side': 'base'})
+        for key in ('oid', 'sha256', 'mode', 'bytes'):
+            self.assertEqual(context['head'][key], context['base'][key])
+        for side in ('base', 'head'):
+            value = self.valid()
+            value['findings'][0].update(path='context.py', side=side, line=3, quote='\tpass')
+            contract.validate(value, bundle)
+        self.assertEqual(snapshots.canonical(bundle), before)
+        changed = next(row for row in rendered['files'] if row['path'] == 'feature.py')
+        self.assertNotIn('numbered_source_ref', changed['head'])
+        self.assertNotEqual(changed['base']['numbered_text'], changed['head']['numbered_text'])
+        # A mode-only change is still changed evidence; keep both sides explicit.
+        context_row = next(row for row in bundle['files'] if row['path'] == 'context.py')
+        context_row['changed'] = True
+        context_row['head']['mode'] = '100755'
+        self.assertIn('numbered_text', reviewer.numbered_source(bundle)['files'][-1]['head'])
+
+    def test_profiles_union_explicit_context_and_enforce_bounded_searches(self):
+        paths, terms, selection = profiles.select('ics-ui', ['extra.py', 'src/lib/actmain.py'], ['custom'])
+        self.assertIn('src/lib/ics_info_view.py', paths)
+        self.assertEqual(paths.count('src/lib/actmain.py'), 1)
+        self.assertIn('extra.py', paths)
+        self.assertIn('custom', terms)
+        self.assertEqual(selection['profile'], 'ics-ui')
+        self.assertIn('src/lib/ics_info_view.py', selection['paths'])
+        self.assertEqual(profiles.select('manual', ['feature.py'], []), (['feature.py'], [], None))
+        for name, context, searches in [('candidate/path', [], []), ('manual', ['../bad'], []),
+                                        ('ics-ui', [], ['term' + str(i) for i in range(16)])]:
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                profiles.select(name, context, searches)
+
+    def test_profile_missing_path_fails_before_api_and_manual_preserves_snapshot(self):
+        args = ['prepare', '--repo', str(self.repo), '--base', self.base, '--head', self.head]
+        output = self.root / 'manual-profile'
+        self.assertEqual(cli.main(args + ['--output', str(output)]), 0)
+        expected = self.bundle()
+        expected['stated_purpose'] = ''
+        self.assertEqual(json.loads((output / 'snapshot.json').read_text()), expected)
+        output = self.root / 'missing-profile-context'
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'fixture-key'}), patch.object(reviewer, 'send') as send:
+            self.assertEqual(cli.main(['review'] + args[1:] + ['--purpose', 'UI',
+                '--profile', 'ics-ui', '--output', str(output)]), 2)
+        send.assert_not_called()
+        self.assertEqual(json.loads((output / 'report.json').read_text())['error'], 'ValueError')
+
+    def test_profile_records_rationale_in_immutable_bundle_and_respects_budget(self):
+        for path in profiles.PROFILES['ics-ui']['paths']:
+            self.write(path, '# context fixture\n')
+        self.base = self.commit()
+        self.write('feature.py', 'pass\n')
+        self.head = self.commit()
+        output = self.root / 'profile'
+        args = ['prepare', '--repo', str(self.repo), '--base', self.base, '--head', self.head,
+                '--profile', 'ics-ui', '--output', str(output)]
+        self.assertEqual(cli.main(args), 0)
+        bundle = json.loads((output / 'snapshot.json').read_text())
+        self.assertEqual(bundle['context_selection']['profile'], 'ics-ui')
+        self.assertEqual(bundle['reference_search']['terms'], sorted(profiles.PROFILES['ics-ui']['searches']))
+        self.assertTrue(all(not row['changed'] for row in bundle['files'] if row['path'] != 'feature.py'))
+        self.assertEqual(snapshots.digest(bundle), json.loads((output / 'report.json').read_text())['snapshot_sha256'])
+        self.assertEqual(cli.main(args[:-1] + [str(self.root / 'profile-budget'), '--max-bytes', '1024']), 2)
+
     def test_serialized_request_budget_blocks_call_without_truncation(self):
         bundle = self.bundle()
         bundle['limits']['max_bytes'] = 1024
@@ -565,6 +639,19 @@ class PilotTests(unittest.TestCase):
         with patch.dict('os.environ', {'GITHUB_REF': 'refs/heads/contributor'}):
             with self.assertRaisesRegex(ValueError, 'trusted main'):
                 hosted.main('review')
+
+    def test_hosted_profile_is_validated_before_fetch_and_forwarded(self):
+        env = dict(GITHUB_REF='refs/heads/main', REVIEW_BASE=self.base, REVIEW_HEAD=self.head,
+                   REVIEW_CONTEXT='[]', REVIEW_SEARCHES='[]', REVIEW_PROFILE='ics-transport')
+        with patch.dict('os.environ', env), patch.object(hosted, 'cli', return_value=0) as call:
+            hosted.main('prepare')
+        args = call.call_args.args[0]
+        self.assertEqual(args[args.index('--profile') + 1], 'ics-transport')
+        env['REVIEW_PROFILE'] = 'candidate-owned-profile'
+        with patch.dict('os.environ', env), patch.object(hosted.subprocess, 'run') as run, \
+                self.assertRaisesRegex(ValueError, 'trusted context profile'):
+            hosted.main('fetch')
+        run.assert_not_called()
 
     def test_cli_missing_key_is_recorded_as_incomplete(self):
         args = ['review', '--repo', str(self.repo), '--base', self.base, '--head', self.head,
