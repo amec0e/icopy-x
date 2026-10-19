@@ -338,7 +338,7 @@ jobs:
           fi
 
       - name: Upload PM3 client artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pm3-client-arm
           path: |
@@ -389,7 +389,7 @@ jobs:
           cat /tmp/proxmark3/pm3_manifest.json
 
       - name: Upload firmware artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pm3-firmware
           path: |
@@ -435,7 +435,7 @@ jobs:
           cp client/dictionaries/*.dic /tmp/out/ 2>/dev/null || true
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: iceman-client-linux
           path: /tmp/out/
@@ -496,7 +496,7 @@ jobs:
           done
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: iceman-client-windows
           path: ${{ github.workspace }}/client-out/windows/
@@ -534,7 +534,7 @@ jobs:
             --binary client/proxmark3 --output "/tmp/out/macos/pm3_client_build.json"
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: iceman-client-macos
           path: /tmp/out/macos/
@@ -590,13 +590,13 @@ jobs:
         run: python tools/build_ipk.py --sn UNIVERSAL --no-flash --output icopy-x-noflash.ipk
 
       - name: Upload flash IPK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: icopy-x-flash-ipk
           path: icopy-x-flash.ipk
 
       - name: Upload no-flash IPK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: icopy-x-noflash-ipk
           path: icopy-x-noflash.ipk
@@ -686,7 +686,7 @@ jobs:
         run: python3 tools/release_ci/bundle.py manifest
 
       - name: Retain complete release candidate
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-candidate
           path: |
