@@ -169,6 +169,7 @@ def reconcile(api, current, comments):
             try:
                 old = api('GET', route('/actions/runs/' + str(record['run_id'])))
             except HTTPError as error:
+                error.close()
                 if error.code != 404:
                     raise
                 old = {'status': 'completed'}
