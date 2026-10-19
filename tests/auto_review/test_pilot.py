@@ -306,6 +306,79 @@ class PilotTests(unittest.TestCase):
         self.assertEqual(report['failure_stage'], 'transport')
         self.assertNotIn('secret-in-arbitrary-error', json.dumps(report))
 
+    def test_baseline_allows_three_long_generations_with_short_http_timeout(self):
+        bundle = self.bundle()
+        clock = [0]
+        starts = []
+        requests = []
+        def advance(seconds):
+            clock[0] += seconds
+        def send(request, key, timeout, **kwargs):
+            self.assertLessEqual(timeout, 120)
+            self.assertFalse(kwargs['cancel'])
+            if request is not None:
+                starts.append(clock[0])
+                requests.append(request)
+            response = self.response()
+            if clock[0] - starts[-1] < 500:
+                response.update(status='in_progress', output=[], usage=None)
+            return response
+        with patch.object(reviewer.time, 'monotonic', side_effect=lambda: clock[0]), \
+                patch.object(reviewer.background.time, 'sleep', side_effect=advance), \
+                patch.object(reviewer, 'send', side_effect=send):
+            report = reviewer.review(bundle, 'policy', 'fixture-key')
+        self.assertEqual(report['status'], 'ADVISORY_COMPLETE')
+        self.assertEqual(clock[0], 1500)
+        self.assertEqual(len(requests), 3)
+        self.assertTrue(all(r['max_output_tokens'] == 128000 for r in requests))
+        self.assertTrue(all(r['reasoning'] == {'effort': 'high'} for r in requests))
+        self.assertEqual(report['max_output_tokens_per_pass'], 128000)
+        self.assertEqual(report['max_generations'], 3)
+        self.assertEqual([a['elapsed_seconds'] for a in report['attempts']], [500] * 3)
+        self.assertTrue(all(a['poll_count'] == 250 for a in report['attempts']))
+
+    def test_overall_budget_still_stops_late_pass_and_preserves_prior_result(self):
+        bundle = self.bundle()
+        clock = [0]
+        def send(*args, **kwargs):
+            clock[0] += 20
+            return self.response()
+        with patch.object(reviewer.time, 'monotonic', side_effect=lambda: clock[0]), \
+                patch.object(reviewer, 'send', side_effect=send) as sender:
+            report = reviewer.review(bundle, 'policy', 'fixture-key', review_budget_seconds=30)
+        self.assertEqual(sender.call_count, 2)
+        self.assertEqual(report['status'], 'INCOMPLETE')
+        self.assertEqual(report['failure_stage'], 'deadline')
+        self.assertEqual(report['review'], self.valid())
+        self.assertEqual(len(report['calls']), 1)
+        self.assertEqual(report['attempts'][1]['terminal_response']['usage']['output_tokens'], 10)
+
+    def test_invalid_generation_limits_prevent_api_requests(self):
+        for options in (dict(max_output_tokens=128001), dict(max_output_tokens=999),
+                        dict(max_output_tokens=True), dict(review_budget_seconds=5401),
+                        dict(review_budget_seconds=29), dict(review_budget_seconds=float('inf')),
+                        dict(timeout=181)):
+            with self.subTest(options=options), patch.object(reviewer, 'send') as send:
+                with self.assertRaisesRegex(ValueError, 'limits outside'):
+                    reviewer.review(self.bundle(), 'policy', 'fixture-key', **options)
+                send.assert_not_called()
+
+    def test_cli_forwards_independent_limits_and_records_actual_configuration(self):
+        output = self.root / 'budgeted'
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'fixture-key'}), \
+                patch.object(reviewer, 'send', return_value=self.response()) as send:
+            code = cli.main(['review', '--repo', str(self.repo), '--base', self.base,
+                '--head', self.head, '--purpose', 'Fixture', '--output', str(output),
+                '--max-output-tokens', '32000', '--review-budget-seconds', '900', '--timeout', '45'])
+        self.assertEqual(code, 0)
+        report = json.loads((output / 'report.json').read_text())
+        self.assertEqual(report['review_budget_seconds'], 900)
+        self.assertEqual(report['max_output_tokens_per_pass'], 32000)
+        self.assertEqual(len(report['calls']), 3)
+        for call in send.call_args_list:
+            self.assertEqual(call.args[0]['max_output_tokens'], 32000)
+            self.assertEqual(call.args[2], 45)
+
     def test_timeout_records_attempt_and_unknown_usage_without_retry(self):
         bundle = self.bundle()
         with patch.object(reviewer.time, 'monotonic', side_effect=[0, 1, 2, 9]), \
@@ -348,7 +421,7 @@ class PilotTests(unittest.TestCase):
             report = reviewer.review(self.bundle(), 'policy', 'fixture-key')
         self.assertEqual(report['status'], 'ADVISORY_COMPLETE')
         self.assertEqual(report['transport'], 'background-v1')
-        self.assertEqual(report['review_budget_seconds'], 360)
+        self.assertEqual(report['review_budget_seconds'], 5400)
         self.assertEqual(len(report['attempts']), 3)
         self.assertEqual(len(report['calls']), 3)
         self.assertEqual(send.call_count, 6)

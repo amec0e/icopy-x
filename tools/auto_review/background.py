@@ -1,5 +1,6 @@
 """One generation, bounded status polling, and best-effort cleanup. No retries."""
 from datetime import datetime, timezone
+import math
 import re
 import time
 from uuid import uuid4
@@ -9,7 +10,6 @@ from .errors import ValidationError
 PENDING = ('queued', 'in_progress')
 TERMINAL = ('completed', 'failed', 'incomplete', 'cancelled')
 POLL_SECONDS = 2
-MAX_POLLS = 180
 CANCEL_TIMEOUT = 10
 
 
@@ -37,6 +37,9 @@ def run(request, key, timeout, attempt, deadline, send, capture, checkpoint=None
     terminal = False
     attempt['http_requests'] = []
     attempt['poll_count'] = 0
+    # Scale the finite poll bound with the actual generation time available;
+    # a fixed count must not silently impose the old six-minute deadline.
+    attempt['poll_limit'] = max(0, math.ceil((deadline - time.monotonic()) / POLL_SECONDS))
     attempt['cleanup'] = {'outcome': 'unknown_response'}
 
     def save():
@@ -137,7 +140,7 @@ def run(request, key, timeout, attempt, deadline, send, capture, checkpoint=None
         observe(value)
         remaining()  # Never accept a response received after the review deadline.
         while not terminal:
-            if attempt['poll_count'] >= MAX_POLLS:
+            if attempt['poll_count'] >= attempt['poll_limit']:
                 raise ReviewDeadline()
             time.sleep(min(POLL_SECONDS, remaining()))
             remaining()

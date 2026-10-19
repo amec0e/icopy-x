@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import sys
 
-from .reviewer import review
+from .reviewer import DEFAULT_OUTPUT_TOKENS, DEFAULT_REVIEW_BUDGET_SECONDS, review
 from .profiles import PROFILES, select
 from .snapshots import canonical, collect, digest
 
@@ -30,8 +30,10 @@ def main(argv=None):
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--max-bytes', type=int, default=2_000_000)
     parser.add_argument('--max-file-bytes', type=int, default=1_000_000)
-    parser.add_argument('--max-output-tokens', type=int, default=6000)
-    parser.add_argument('--timeout', type=int, default=120)
+    parser.add_argument('--max-output-tokens', type=int, default=DEFAULT_OUTPUT_TOKENS)
+    parser.add_argument('--timeout', type=int, default=120, help='Inactivity timeout for each HTTP operation')
+    parser.add_argument('--review-budget-seconds', type=int, default=DEFAULT_REVIEW_BUDGET_SECONDS,
+                        help='Scheduling budget across all three background generations')
     args = parser.parse_args(argv)
     # Refuse overwriting evidence; never write to paths selected by the model.
     args.output.mkdir(parents=True, exist_ok=False)
@@ -58,6 +60,7 @@ def main(argv=None):
             policy = Path(__file__).with_name('policy.md').read_text(encoding='utf-8')
             report = review(bundle, policy, os.environ.get('OPENAI_API_KEY'),
                             max_output_tokens=args.max_output_tokens, timeout=args.timeout,
+                            review_budget_seconds=args.review_budget_seconds,
                             checkpoint=lambda value: save_report(args.output, value))
             code = 0 if report['status'] == 'ADVISORY_COMPLETE' else 2
     except (ValueError, OSError, TimeoutError) as error:

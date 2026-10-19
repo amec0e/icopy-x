@@ -60,16 +60,29 @@ malformed or oversized searches create explicit gaps and prevent API calls;
 results are never silently truncated into a false claim of absence. Search uses
 LF-based Git line numbers; full-source citation validation remains unchanged.
 
-Each live invocation submits at most three generations, no retries, with a 6,000
-output-token cap per generation (including reasoning). Default source/bundle
+Each live invocation submits at most three generations, no retries, with a 128,000
+output-token cap per generation (including reasoning). These generous manual-pilot
+defaults establish a completion/usage baseline before choosing production limits.
+The former 6,000-token cap consumed all reasoning allowance without producing a
+review on the larger startup case. [OpenAI's reasoning guidance](https://developers.openai.com/api/docs/guides/reasoning)
+recommends reserving at least 25,000 tokens while experimenting;
+[Astra supports 128,000 output tokens](https://developers.openai.com/api/docs/models/gpt-6-astra).
+Default source/bundle
 limits are 2 MB total and 1 MB per file. Background submissions are polled every
 two seconds against the same response ID; polls do not submit new generations.
-The review scheduling deadline remains 360 seconds across all three passes.
-An individual generation can therefore exceed the former 120-second synchronous
-wait without increasing the overall review budget. HTTP socket timeouts remain
-at most 120 seconds, clamped to remaining time. The hosted job retains its
-12-minute wall-clock limit. These are work limits, **not a dollar ceiling**.
-Inspect recorded token usage and the project's API usage before expanding trials.
+The review scheduling budget is 5,400 seconds (90 minutes) across all three passes,
+independent of the HTTP inactivity timeout. The poll-count bound scales with time
+remaining, so it cannot silently retain the old six-minute limit. HTTP socket
+timeouts default to 120 seconds, clamped to remaining time. The hosted job has a
+100-minute wall-clock limit, leaving room for collection, cleanup and artifacts.
+These are ceilings, not target consumption or a promise of completion. A normal
+early completion returns immediately. They are **not a dollar ceiling**.
+Record actual tokens, elapsed time, review usefulness and API cost before reducing
+limits; do not infer production reliability or typical cost from one baseline.
+The CLI exposes `--max-output-tokens` (1,000–128,000) and
+`--review-budget-seconds` (30–5,400) for later calibration; `--timeout` controls
+only individual HTTP inactivity. Reports retain the effective token, generation
+and scheduling limits. Hosted invocations use these same defaults.
 The serialized model request also has to fit the bundle's total byte limit,
 including numbered source, policy, schema and previous-pass output.
 
