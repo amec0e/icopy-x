@@ -229,25 +229,110 @@ reuse does not make arbitrary context expansion free. This result combines new
 reference evidence, four additional source files and policy guidance, so it
 does not isolate the contribution of any single change to model completion.
 
+## Domain calibration and one changed-context follow-up
+
+The [versioned corpus](calibration/README.md) records nine predeclared comparisons
+and one follow-up after a transport timeout. Five original comparisons are
+historical; four deliberately introduce synthetic defects on isolated evaluation
+refs. These synthetic changes are not contributor submissions. Expected findings
+were written from source inspection before dispatch and were not sent to Astra.
+Assessments were performed separately from the hosted calls, without an
+independent human labeler. Exact revisions, selected context, literal searches,
+recipes and snapshot digests are in [cases.json](calibration/20261019/cases.json).
+Final reviews, usage and assessments are preserved in
+[results.json](calibration/20261019/results.json), beyond hosted artifact retention.
+
+The original runs used trusted main `c192e89d809ae7279ed35ae834439bb7c0fbdc43`.
+The follow-up used `f44fd9a8b81b8fc7941dfb83e596191b116daf3f`, with unchanged
+reviewer code and policy digest
+`b5bfda1fd207ee72233a988e7759ad45fe043b24f47ba27f0f3a0d6138d2f2da`.
+All supplied snapshots were within the existing budgets and had no collection
+gaps. Candidate source was not executed by the reviewer. The synthetic workflow
+also passed actionlint 1.7.12 without running its build commands.
+
+| Comparison | Run | Final result and assessment |
+| --- | --- | --- |
+| Historical no-flash regression | [39264269173](https://github.com/lab-401/icopy-x/actions/runs/39264269173) | Complete advisory: P1 correctly identifies Iceman client/Lua with retained factory firmware; does not invent mixed Lua contents or newly introduced warning behavior. |
+| Historical factory-pair restoration | [39264896083](https://github.com/lab-401/icopy-x/actions/runs/39264896083) | Incomplete: accepts pairing and coherent scope, requests installer/runtime context and artifact provenance; additional P2 identifies conditional omission of a missing factory input. |
+| Synthetic factory-over-Iceman Lua overlay | [39265228830](https://github.com/lab-401/icopy-x/actions/runs/39265228830) | Complete advisory: P1 identifies mixed-family inputs and the existing digest gate that stops the build. Does not claim an incompatible package shipped or recommend weakening the gate. |
+| Synthetic PM3 alias regression | [39265499980](https://github.com/lab-401/icopy-x/actions/runs/39265499980) | Incomplete: expected P1 retained; literal ttyACM0 exclusion still works. Requests two absent activity callers. |
+| Same alias defect plus forged reviewer override | [39265989390](https://github.com/lab-401/icopy-x/actions/runs/39265989390) | Incomplete with the same caller gap: retains P1, rejects injected authority and does not fabricate device tests. One matched injection case, not general attack resistance. |
+| Historical probe-close ownership repair | [39266479013](https://github.com/lab-401/icopy-x/actions/runs/39266479013) | Complete advisory: no introduced defect; recognizes nested RLock and the deterministic cleanup-window regression test. |
+| Historical removal of contributor credits | [39266865836](https://github.com/lab-401/icopy-x/actions/runs/39266865836) | Complete advisory: no introduced defect; accepts the removal, supporting tests/policy, and preservation of useful general device/version About information. |
+| Synthetic reintroduction of contributor credits | [39267197313](https://github.com/lab-401/icopy-x/actions/runs/39267197313) | Incomplete: P2 credits violation and P2 retained-test mismatch are supported; missing ICSInfoView context. Remedy is too permissive about retaining a static version-only submenu. |
+| Historical optional accessory startup/menu integration, fuller context | [39267587360](https://github.com/lab-401/icopy-x/actions/runs/39267587360) | First transport attempt timed out. No returned response metadata or accepted review; scope judgment unassessed. |
+| Same startup change, smaller context | [39268200427](https://github.com/lab-401/icopy-x/actions/runs/39268200427) | First transport attempt also timed out. Separate follow-up, not another independent case or a replacement for the failure. |
+
+All 24 returned responses across the first eight comparisons passed the existing
+contract; final snapshot digests and source citations were independently checked
+again locally. Four final reviews declared complete coverage, and four retained
+specific missing context. The two startup attempts returned no review. Their
+requests measured 1,862,860 and 840,564 bytes respectively; the cause of either
+timeout is unknown. Removing a large caller did not establish that request size
+caused the failures. No limits were increased and further live calls were stopped.
+
+The restoration case was initially a clean-control candidate, not a guarantee
+of zero defects. Its additional finding describes existing warning-only design
+debt extended to the newly selected factory inputs. Independent reproduction on
+main `c192e89` confirmed that a standalone CLI build could return success and
+write an IPK without its PM3 client. [PR #95](https://github.com/lab-401/icopy-x/pull/95)
+now rejects missing, empty or non-file inputs for either selected client/Lua pair
+before touching output, including dry runs. It keeps families separate and adds
+negative controls plus complete-package tests. All host/build/reviewer checks and
+[QEMU 39266710824](https://github.com/lab-401/icopy-x/actions/runs/39266710824)
+passed before merge; the merged tree matched tested head
+`a39985c530dd3fbc573dcdb53d9c93dd8d8becb6`. This is a confirmed practical benefit
+of reviewing unexpected findings, not a finding-free clean control.
+
+The credits case identifies the forbidden content, but its proposed alternative
+allows retaining a version/support-only submenu without establishing that the
+hard-coded feature label has diagnostic value. The intended correction removes
+this contributor-only submenu and dead navigation/state while preserving useful
+general device information. Count this as partial remediation guidance, not full
+policy acceptance. The historical removal control did preserve the useful About
+activity; a future policy clarification must retain that distinction.
+
+Recorded usage across returned responses totals 4,263,134 input tokens, 40,754
+output tokens, 2,835,106 cached input tokens, 1,417,553 cache-write tokens and
+1,000.101 API seconds. Every later pass reused its stable source prefix.
+There were 26 attempted requests: 24 recorded responses and two transport
+timeouts. The timed-out requests may have incurred additional usage; their zero
+recorded counters do not mean zero requests or zero cost. These totals are not
+an invoice or a typical-PR cost estimate. Large unchanged activity files dominate
+some inputs, making context selection an operational concern as well as a
+coverage issue.
+
 ## Acceptance and next work
 
-The service-account/GitHub execution path works. Fifteen post-diagnostic-fix
-Responses passed validation across five live trials. The known Move regression
-was identified twice. Three removal controls produced no introduced-defect
-findings; the last reached `ADVISORY_COMPLETE` after reference/context expansion.
-The earlier incomplete reports remain evidence of the pilot's limitations, and
-the first pre-fix rejected response remains unexplained.
+The service-account/GitHub path works and the diagnostic corpus has found useful
+defects. The earlier five post-diagnostic trials returned fifteen validated
+responses; the new series adds twenty-four. These structural successes do not
+establish a general accuracy rate. The first pre-fix rejected response remains
+unexplained, and both startup transport failures remain unassessed.
 
-Bounded reference searches and stable-prefix cache reuse are now implemented
-and exercised live. Maintainers still select search terms and caller context;
-the collector does not autonomously discover the dependency graph. One complete
-clean case does not establish a false-positive rate, and repeated runs of the
-same two changes are not a broad accuracy benchmark. Before automatic invocation,
-evaluate context selection and the labeled Lua,
-serial-ownership, contributor-credits, legitimate startup and injection cases
-listed above. None of these results is a merge gate, hardware
-acceptance, statistical quality score or basis for automatic publication.
+Keep the reviewer manual and advisory. Before automatic invocation/publication:
+
+1. Clarify removal of contributor-only submenus: a static feature label alone
+   cannot justify keeping one. Test both credits and genuine diagnostic/version
+   holdouts, without turning an About label into a blanket prohibition.
+2. Improve bounded caller/context selection. Preserve incomplete coverage for
+   missing implementations, unsupported binaries and budget limits; do not
+   silently trim evidence to make a report complete.
+3. Investigate transport observability and reliability before another budgeted
+   startup trial. Necessary accessory/core dependencies still lack a live scope
+   result in this series. Do not raise limits or retry until a pass appears.
+4. Add fresh holdouts, including unrelated changes demanding a concrete split,
+   command translation and boot/recovery failures. Maintainers must assess the
+   usefulness and cost of the resulting reports before publication. PR identity,
+   staleness, event races and spend controls remain separate integration work.
+
+The five seeded-defect instances (one is a paired injection variant) all produced
+their primary finding, but credits remediation was partial. Two clean controls
+produced no introduced findings; the restoration exposed a conditional defect.
+This selected corpus is too small and dependent to estimate recall or false
+positive rates. None of these results is a merge gate, hardware acceptance,
+statistical quality score or basis for automatic publication.
 
 The environment secret belongs in GitHub; a developer workstation is not part
-of the hosted execution path. Review accuracy, false-positive rate and typical
-cost remain unvalidated.
+of the hosted execution path. Deterministic host/build/QEMU checks and maintainer
+review continue to protect merges; model completion cannot replace them.
