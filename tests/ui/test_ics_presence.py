@@ -209,6 +209,7 @@ def test_foreground_session_owns_handle_before_ui_delivery(usb):
 
 def test_foreground_cancel_does_not_wait_for_held_handshake(usb):
     entered, release = threading.Event(), threading.Event()
+    cancelled = threading.Event()
     session = decoder.DecoderSession()
     results = []
 
@@ -219,15 +220,26 @@ def test_foreground_cancel_does_not_wait_for_held_handshake(usb):
 
     usb.ports['/dev/ttyACM1'] = {'reply': reply}
     worker = threading.Thread(target=lambda: results.append(session.detect()))
+    cancel_results = []
+
+    def cancel():
+        cancel_results.append(session.cancel())
+        cancelled.set()
+
+    cancelling = threading.Thread(target=cancel)
     try:
         worker.start()
         assert entered.wait(3)
         # The worker still holds discovery's lock, but no result is published.
-        assert session.cancel() is None
+        cancelling.start()
+        assert cancelled.wait(1), 'Cancellation waited for serial I/O'
+        assert cancel_results == [None]
         assert not release.is_set()
     finally:
         release.set()
         worker.join(3)
+        if cancelling.ident is not None:
+            cancelling.join(3)
         session.cancel()
     assert not worker.is_alive()
     assert results == [None]
