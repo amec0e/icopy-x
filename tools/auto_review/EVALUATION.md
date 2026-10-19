@@ -1,7 +1,8 @@
 # Pilot evaluation record
 
-19 October 2026. These are offline results, not a live Astra quality evaluation.
-The 22 contract tests pass on local Windows/Python 3.12. Workflow syntax passes
+19 October 2026. Offline contracts and an initial live integration trial are
+recorded separately below; review quality is not yet established.
+The 27 contract tests pass on local Windows/Python 3.12. Workflow syntax passes
 actionlint 1.7.12. Linux/Windows CI results belong to the associated PR checks.
 
 Four historical comparisons were prepared directly from immutable Git objects:
@@ -31,6 +32,29 @@ validation alone cannot score semantic correctness. Include realistic prompt
 injection attempts in candidate comments and documents. Record API token usage,
 elapsed time and failures, including interrupted or truncated calls.
 
-No live calls have been made for this record. API/model access, review accuracy,
-false-positive rate and cost remain unvalidated. The environment secret belongs
-in GitHub; a developer workstation is not part of the hosted execution path.
+## First live integration trial
+
+The project service-account key was added to GitHub's `astra-review` environment.
+[Run 39252019439](https://github.com/lab-401/icopy-x/actions/runs/39252019439), from
+trusted main `55512e414c0e5e4d6302c949995dbb45f1dd779a`, reviewed the historical menu
+introduction with the exact base/head, purpose and widget context listed above.
+Its snapshot digest matched the earlier hosted preparation:
+`9ba78feb04073a310bda17f227e3f5f522af06cc3d1b8de3ea825b8d6fffaae2`.
+
+The API returned a completed `gpt-6-astra` response in 73.803 seconds, with 82,827
+input tokens and 3,747 output tokens. Local response/evidence validation rejected
+it; the workflow correctly finished `INCOMPLETE`, made no second request, and
+saved no accepted review. Authentication and model access worked. This is not a
+review-quality pass or evidence that the expected finding was produced.
+
+That version recorded only `ValueError`, so the exact rejection reason is
+unknown. The unstored response cannot be reconstructed from the artifact.
+The diagnostic update adds fixed failure stages/codes and numbered source lines
+without relaxing evidence checks, plus full-request byte budgeting and allowed
+cache/reasoning usage details. These changes require a new live trial; they do
+not retrospectively explain the first failure. Clean-change controls and the
+broader labeled evaluation above remain necessary before automatic invocation.
+
+The environment secret belongs in GitHub; a developer workstation is not part
+of the hosted execution path. Review accuracy, false-positive rate and typical
+cost remain unvalidated.

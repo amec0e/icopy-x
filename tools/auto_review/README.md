@@ -33,6 +33,8 @@ output-token cap per request (including reasoning). Default source/bundle limits
 are 2 MB total and 1 MB per file. The job has a 12-minute wall-clock limit; API
 socket timeouts are 120 seconds. These are work limits, **not a dollar ceiling**.
 Inspect recorded token usage and the project's API usage before expanding trials.
+The serialized model request also has to fit the bundle's total byte limit,
+including numbered source, policy, schema and previous-pass output.
 
 The workflow checks out the reviewed main commit that launched it. Candidate
 objects are fetched without checking out their tree. Repository text and prior
@@ -50,6 +52,17 @@ with any gap makes no API call. Refusals, malformed responses, missing/duplicate
 file coverage, fabricated source quotes, model substitution and truncation fail
 closed. Successful call accounting survives a later failed pass; a network failure
 may still incur API usage that the client cannot record.
+
+The prompt supplies source lines as `numbered_text`: a 1-based line number, a tab,
+then the original line. Quotes must exclude that prefix. `snapshot.json` retains
+the original blobs and hashes; citation validation still checks those original
+lines. `prompt_format` identifies this rendering. A rejected response records a
+fixed `validation_code` and `failure_stage`, not raw API/exception text. For
+example, `source_citation` means a quote or line did not match the evidence;
+`file_coverage` means the changed-file inventory was not covered exactly.
+This aids diagnosis without accepting, repairing or retrying a rejected result.
+Allowed cache/reasoning token counts and truncation reasons are retained when
+returned by the API; the report is not a billing invoice.
 
 ## Offline tests and evaluation limits
 

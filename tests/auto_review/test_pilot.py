@@ -166,10 +166,109 @@ class PilotTests(unittest.TestCase):
 
     def test_api_failure_never_yields_advisory_complete(self):
         def fail(*args):
-            raise ValueError('API unavailable')
+            raise ValueError('API unavailable: secret-in-arbitrary-error')
         report = reviewer.review(self.bundle(), 'policy', 'fixture', request_fn=fail)
         self.assertEqual(report['status'], 'INCOMPLETE')
         self.assertEqual(report['calls'], [])
+        self.assertEqual(report['failure_stage'], 'transport')
+        self.assertNotIn('secret-in-arbitrary-error', json.dumps(report))
+
+    def test_live_validation_failures_have_safe_specific_diagnostics(self):
+        bad_citation = self.valid()
+        bad_citation['findings'][0]['line'] = 1
+        missing_file = self.valid()
+        missing_file['files'] = []
+        malformed = self.response()
+        malformed['output'][0]['content'][0]['text'] = 'untrusted-invalid-json'
+        for response, stage, code in (
+                (self.response(bad_citation), 'evidence', 'source_citation'),
+                (self.response(missing_file), 'evidence', 'file_coverage'),
+                (malformed, 'response', 'review_json')):
+            with self.subTest(code=code):
+                calls = []
+                def send(*args):
+                    calls.append(1)
+                    return response
+                report = reviewer.review(self.bundle(), 'policy', 'fixture-key', request_fn=send)
+                self.assertEqual(report['status'], 'INCOMPLETE')
+                self.assertEqual(report['failure_stage'], stage)
+                self.assertEqual(report['validation_code'], code)
+                self.assertIsNone(report['review'])
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(len(report['calls']), 1)
+                self.assertNotIn('untrusted-invalid-json', json.dumps(report))
+                self.assertNotIn('fixture-key', json.dumps(report))
+
+    def test_numbered_prompt_keeps_original_evidence_and_citations(self):
+        self.write('context.py', '# Unicode: \u00e9\n\n\tpass\n')
+        self.head = self.commit()
+        bundle = self.bundle()
+        before = snapshots.canonical(bundle)
+        valid = self.valid()
+        valid['files'].append(dict(path='context.py', scope='supporting', reviewed=True,
+                                   reason='Additional source example.'))
+        valid['findings'][0].update(path='context.py', line=3, quote='\tpass')
+        def send(request, *args):
+            rendered = json.loads(request['input'][0]['content'])['snapshot']
+            source = next(row for row in rendered['files'] if row['path'] == 'context.py')['head']
+            self.assertEqual(source['numbered_text'], '1\t# Unicode: \u00e9\n2\t\n3\t\tpass')
+            self.assertNotIn('text', source)
+            self.assertEqual(snapshots.canonical(bundle), before)
+            return self.response(valid)
+        report = reviewer.review(bundle, 'policy', 'fixture', request_fn=send)
+        self.assertEqual(report['status'], 'ADVISORY_COMPLETE')
+        self.assertEqual(report['snapshot_sha256'], snapshots.digest(bundle))
+        self.assertEqual(snapshots.canonical(bundle), before)
+        # Numbering is a prompt aid, not permission to accept altered quotes.
+        valid['findings'][0]['quote'] = '3\t\tpass'
+        with self.assertRaisesRegex(ValueError, 'line/quote'):
+            contract.validate(valid, bundle)
+
+    def test_serialized_request_budget_blocks_call_without_truncation(self):
+        bundle = self.bundle()
+        bundle['limits']['max_bytes'] = 1024
+        report = reviewer.review(bundle, 'policy', 'fixture',
+                                 request_fn=lambda *a: self.fail('Oversized request sent'))
+        self.assertEqual(report['status'], 'INCOMPLETE')
+        self.assertEqual(report['validation_code'], 'request_budget')
+        self.assertEqual(report['failure_stage'], 'request')
+        self.assertEqual(report['calls'], [])
+
+    def test_prior_output_counts_against_later_request_budget(self):
+        bundle = self.bundle()
+        bundle['limits']['max_bytes'] = 6000
+        valid = self.valid()
+        valid['summary'] = 'Long source-supported explanation. ' * 150
+        calls = []
+        def send(*args):
+            calls.append(1)
+            self.assertEqual(len(calls), 1, 'Oversized second request sent')
+            return self.response(valid)
+        report = reviewer.review(bundle, 'policy', 'fixture', request_fn=send)
+        self.assertEqual(report['status'], 'INCOMPLETE')
+        self.assertEqual(report['validation_code'], 'request_budget')
+        self.assertEqual(len(report['calls']), 1)
+        self.assertEqual(report['review'], valid)
+
+    def test_accounting_keeps_allowed_token_details_only(self):
+        response = self.response()
+        response['usage'].update(input_tokens_details={
+            'cached_tokens': 5, 'cache_write_tokens': 0, 'other': 'sensitive'},
+            output_tokens_details={'reasoning_tokens': 8, 'other': 'sensitive'})
+        response['incomplete_details'] = {'reason': 'max_output_tokens', 'other': 'sensitive'}
+        report = reviewer.review(self.bundle(), 'policy', 'fixture', request_fn=lambda *a: response)
+        self.assertEqual(report['status'], 'INCOMPLETE')
+        self.assertEqual(report['validation_code'], 'response_incomplete')
+        call = report['calls'][0]
+        self.assertEqual(call['incomplete_reason'], 'max_output_tokens')
+        self.assertEqual(call['usage']['input_tokens_details'], {'cached_tokens': 5, 'cache_write_tokens': 0})
+        self.assertEqual(call['usage']['output_tokens_details'], {'reasoning_tokens': 8})
+        self.assertNotIn('sensitive', json.dumps(report))
+        response['incomplete_details'] = {'reason': 'sensitive'}
+        response['usage']['input_tokens_details'] = {'cached_tokens': True, 'cache_write_tokens': -1}
+        record = reviewer.metadata(response, 'scope')
+        self.assertNotIn('incomplete_reason', record)
+        self.assertEqual(record['usage']['input_tokens_details'], {})
 
     def test_partial_review_preserves_usage_and_refuses_completion(self):
         calls = []

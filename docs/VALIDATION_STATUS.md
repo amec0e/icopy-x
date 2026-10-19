@@ -97,7 +97,12 @@ a manual workflow on trusted main. Its 22 offline contracts passed on Linux and
 Windows. [Hosted preparation 39248718899](https://github.com/lab-401/icopy-x/actions/runs/39248718899)
 completed without an API key and produced the same immutable snapshot digest as
 the local historical-menu trial. This validates hosted collection, not model
-quality. Live Astra evaluation awaits `OPENAI_API_KEY` in the main-only
+quality. The first [live trial](https://github.com/lab-401/icopy-x/actions/runs/39252019439)
+confirmed service-account authentication and Astra access, but response/evidence
+validation rejected its first response. No accepted review was produced. The
+diagnostic update adds fixed failure codes and numbered source lines, with 27
+offline contracts; a live retest and clean-change controls remain pending. See
+[the evaluation record](../tools/auto_review/EVALUATION.md). The API key is in the main-only
 `astra-review` environment. Automatic invocation/publication and a model gate
 remain unimplemented. Human scope review is still required, especially for
 boot/update, translation, firmware, Lua selection, USB ownership and build changes.
