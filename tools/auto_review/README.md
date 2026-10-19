@@ -6,6 +6,11 @@ It saves advisory artifacts. It does **not** post PR comments, approve merges,
 create required checks, execute candidate code, operate hardware or replace CI.
 The same model performs the three passes; these are not independent reviewers.
 
+The separate [automatic PR queue](AUTOMATIC.md) uses this engine and publishes
+advisories through a job without the API key. It is disabled unless the repository
+variable `ASTRA_AUTOMATIC_REVIEW` is `true`. The manual workflow described here
+still has no publication permissions and remains available for focused evaluation.
+
 ## GitHub setup and operation
 
 Use **Settings → Environments → astra-review → Environment secrets** to add
