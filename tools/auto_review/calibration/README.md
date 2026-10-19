@@ -101,7 +101,7 @@ adds opt-in trusted context profiles and shares identical unchanged source in
 the prompt while retaining both originals in the snapshot. [#99](https://github.com/lab-401/icopy-x/pull/99)
 clarifies removal of contributor-only submenus and dead navigation/state.
 All passed host, reviewer, build and both-IPK QEMU checks before merge; the
-reviewer now has 48 offline tests, including detection of stale profile paths.
+changes had 48 offline tests, including detection of stale profile paths.
 
 The follow-up [cases](20261019-followup/cases.json) and
 [results](20261019-followup/results.json) preserve a separately bounded series:
@@ -132,3 +132,21 @@ useful About information but exposed a real gap in the synthetic fallback fix:
 normal provider failures return `?` without entering the changed exception path.
 Its assessment records that supported finding instead of treating an expected
 clean label as ground truth. None of the synthetic changes is merged.
+
+## Background startup trial, 19 October 2026
+
+After #100 passed CI and merged, one separately bounded comparison used
+`background-v1` with the same source snapshot and new submenu policy. Its
+[case](20261019-background/cases.json) and [result](20261019-background/results.json)
+preserve the policy/revision identities, status history, accounting and assessment.
+The cap was three generations and 360 seconds, with 6,000 output tokens per pass
+and no retries. Only the first generation ran: it returned `max_output_tokens`
+after 174.409 seconds, consuming all 6,000 output tokens as reasoning. No accepted
+review was produced. Background transport worked; semantic quality remains
+unassessed for the startup case, and the earlier failures remain unexplained.
+
+Polling is not a new generation. Returned terminal accounting is duplicated in
+the attempt and call records for failure preservation; the result totals count
+it once. This trial records known usage and no transport timeout. It is not a
+review-quality pass or a basis for automatic publication. The next generation-
+budget calibration needs its own explicit bounds and predeclared expectations.

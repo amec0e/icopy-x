@@ -103,47 +103,36 @@ passing tests do not remove their dependency advisories. Modern host tooling use
 patched pins, and Dependabot checks test/station requirements and Actions weekly.
 Legacy dependency alerts remain open; see [TEST_DEPENDENCIES.md](TEST_DEPENDENCIES.md).
 These changes are separate from a device-runtime migration.
-The [Astra advisory pilot](../tools/auto_review/README.md) from #88 is available as
-a manual workflow on trusted main. Updates through #99 have 48 offline
-contracts passing on Linux and Windows, with host/build/QEMU checks passed before
-merge. [Hosted preparation 39248718899](https://github.com/lab-401/icopy-x/actions/runs/39248718899)
-completed without an API key and produced the same immutable snapshot digest as
-the local historical-menu trial. This validates hosted collection, not model
-quality. The first [live trial](https://github.com/lab-401/icopy-x/actions/runs/39252019439)
-confirmed service-account authentication and Astra access, but response/evidence
-validation rejected its first response. After fixed diagnostics and numbered
-source were added, five live trials completed fifteen validated responses. The
-known Move regression was identified twice. Three removal controls found no
-introduced defects; the last reached complete advisory source coverage after
-bounded reference searches and caller context were supplied in
-[run 39261258391](https://github.com/lab-401/icopy-x/actions/runs/39261258391).
-Stable source prompts also demonstrated cache reuse on both later review passes.
-The subsequent [domain corpus](../tools/auto_review/calibration/README.md)
-contains nine original cases and one changed-context follow-up. Eight source
-comparisons returned 24 validated responses and found the seeded packaging,
-serial-alias and credits defects; an unexpected builder omission led to #95.
-Four final reviews retained specific context gaps. Credits remediation was too
-permissive about retaining a static feature-version submenu. Both attempts at
-the larger accessory-startup comparison timed out before returning a review,
-leaving that scope judgment unassessed and their API usage unknown.
-Follow-up changes #97-99 preserve failed-attempt diagnostics, add bounded caller
-profiles, avoid duplicating identical unchanged source in prompts, and clarify
-complete removal of contributor-only submenus. All passed host/reviewer/build
-and both-IPK QEMU checks before merge. The repeated alias comparison now reaches
-complete advisory source coverage; the credits comparison now recommends full
-submenu/state/navigation removal while preserving useful device diagnostics.
-The static-version submenu counterexample received the same complete-removal
-guidance without inventing contributor branding. The useful-diagnostics control
-preserved About and identified a supported gap in its synthetic fallback change;
-it is not a finding-free clean-control pass. Four follow-up comparisons returned
-twelve validated responses and complete source advisories.
-The accessory-startup comparison timed out a third time without response
-headers, review or usage, after 120.125 seconds. The cause remains unknown.
-These results do not establish general review accuracy or resolve the transport
-reliability issue. Complete source coverage is not a test pass, device acceptance
-or merge approval. See
-[the evaluation record](../tools/auto_review/EVALUATION.md) for exact revisions,
-findings and usage. The API key is in the main-only
-`astra-review` environment. Automatic invocation/publication and a model gate
-remain unimplemented. Human scope review is still required, especially for
-boot/update, translation, firmware, Lua selection, USB ownership and build changes.
+
+The [Astra advisory pilot](../tools/auto_review/README.md) is available as a
+manual workflow on trusted main. Updates through
+[#100](https://github.com/lab-401/icopy-x/pull/100) have 65 offline contracts
+passing on Linux and Windows, with host/build/QEMU checks passed before merge.
+The API key is held in the main-only `astra-review` GitHub environment; a
+maintainer workstation is not part of hosted execution. The reviewer inspects
+source without executing candidate code.
+
+The [calibration corpus](../tools/auto_review/calibration/README.md) has produced
+useful findings about menu changes, packaging, serial aliases and contributor
+credits; an unexpected builder omission led to #95. Caller/context follow-ups
+and the clarified submenu policy improved coverage and remediation. A useful
+About control was preserved but exposed a supported gap in its synthetic
+fallback change. This small, selected, partly synthetic corpus is not an accuracy
+estimate. Complete advisory source coverage is not a test or hardware pass.
+
+The [background startup trial](https://github.com/lab-401/icopy-x/actions/runs/39287297642)
+confirmed submission and polling beyond the former 120-second connection wait.
+Its first generation ended after 174.409 seconds at the 6,000-token output cap,
+using the entire allowance for reasoning and producing no accepted review. It
+was recorded as incomplete, with known usage, and stopped before later passes.
+The startup scope judgment remains unavailable, and the causes of the earlier
+unacknowledged timeouts remain unknown. The next step is a separately bounded
+generation-budget calibration, not an automatic retry or silent limit increase.
+
+See [the evaluation record](../tools/auto_review/EVALUATION.md) for exact
+revisions, findings, usage and remaining work. Fresh scope-splitting, translation
+and boot/recovery cases are still needed. Automatic invocation/publication,
+PR identity/staleness handling, event deduplication and spend controls remain
+unimplemented. The pilot is advisory, not a merge gate. Deterministic CI and
+human scope review remain the merge criteria, especially for boot/update,
+translation, firmware, Lua selection, USB ownership and build changes.

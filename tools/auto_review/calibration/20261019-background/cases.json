@@ -1,0 +1,30 @@
+[
+  {
+    "id": "optional-accessory-startup-background",
+    "kind": "historical",
+    "base": "5fa13555fbae77c4198de27c8b20935965b5dba3",
+    "head": "2a644f989c7ebbf9f8ecdf97f1b9992830aaefa5",
+    "purpose": "Show the ICS Decoder menu entry only while an accessory has passed its bounded identity handshake",
+    "context": [],
+    "searches": [],
+    "expectations": {
+      "must_find": [],
+      "must_not": [
+        "Demand separation of necessary main-menu lifecycle/enumeration changes solely because they touch core code.",
+        "Claim mocked serial or QEMU checks prove genuine ICS USB hardware works."
+      ],
+      "expected_scope": "One coherent optional accessory/menu lifecycle change with documentation and deterministic tests. Inspect real introduced defects if any, without blanket exemption for a previously merged fix."
+    },
+    "gaps": [],
+    "profile": "accessory-menu",
+    "follow_up_to": "optional-accessory-startup-context-followup",
+    "snapshot_sha256": "0666083c6ceed8f6f93e78f9943617bbe9ad955a9239efeb7d7350988a42b259",
+    "initial_request_bytes": 1116549,
+    "policy_sha256": "d2d661801a56c0b56587d8322c96113f5841de8ee063927ba912e11769320ffa",
+    "transport": "background-v1",
+    "review_budget_seconds": 360,
+    "max_generation_requests": 3,
+    "automatic_retries": 0,
+    "max_output_tokens_per_pass": 6000
+  }
+]
