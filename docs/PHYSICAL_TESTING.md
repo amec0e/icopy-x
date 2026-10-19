@@ -6,10 +6,11 @@ button events, known-card read/repeat/cancel checks, and a resumable PC-mode
 handover. It never installs an IPK, writes a badge or flashes PM3. Run it locally,
 not on a contributor's PR runner. Profiles and evidence are private lab data.
 
-This first station release has host contract tests, not physical acceptance.
-The earlier experimental scripts established the SSH/Tk/framebuffer/HMI methods
-on an iCopy-XS. The maintained implementation still needs one supervised session
-to calibrate screen strings, USB descriptors and companion-client output.
+The maintained station has completed a Classic reference read and one supervised
+Windows PC-mode round trip on the recorded candidates. Its cancellation command
+has not yet completed physical acceptance. See the dated, configuration-specific
+[physical acceptance record](PHYSICAL_ACCEPTANCE_20261019.md); calibrate a new
+station's screen strings, USB descriptors and companion-client output independently.
 Neither this controller nor QEMU certifies RF behavior for every card family.
 
 ## Setup and enrollment

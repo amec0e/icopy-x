@@ -44,11 +44,11 @@ smallest useful host regression; maintainers own shared QEMU fixtures and pins.
 | --- | --- | --- |
 | PM3 build integrity | [#65](https://github.com/lab-401/icopy-x/pull/65): matching source/platform/FPGA checks; one physical Iceman client/device version/status pair passed on 19 October | Not full firmware readback or flashing acceptance. FPGA bitstreams are verified upstream inputs, not newly synthesized HDL. |
 | Ultralight dumps | [#66](https://github.com/lab-401/icopy-x/pull/66): header, UID, length/capacity and partial-data assertions on host/QEMU | Retest the supplied compatible tag; genuine Ultralight/NTAG coverage is separate. An earlier intermittent empty reply remains unexplained. |
-| Timeout/cancellation | [#67](https://github.com/lab-401/icopy-x/pull/67): bounded drain and no implicit replay; six supplemental physical Classic cancellation/re-read cases passed | Maintained cancellation command has a progress-label guard race; LF recovery and broader hardware abort timing remain pending. |
+| Timeout/cancellation | [#67](https://github.com/lab-401/icopy-x/pull/67): bounded drain and no implicit replay; six supplemental physical Classic cancellation/re-read cases passed. #87 adds a bounded numeric progress guard | Latest maintained attempt refused input at its final screen guard; battery loss interrupted follow-up. Cause/retest, LF recovery and broader hardware abort timing remain pending. |
 | Auto Copy exit | [#70](https://github.com/lab-401/icopy-x/pull/70): timer/callback guards; physical Classic Auto Copy read, exit and re-entry passed on the recorded candidate | Other card families and changed application versions require applicable acceptance. |
-| Maintainer station | [#68](https://github.com/lab-401/icopy-x/pull/68): maintained Classic reference read and one complete Windows PC-mode round trip passed | Repair/retest maintained cancellation guard. PC-mode evidence does not cover other hosts, endurance or mass-storage transfers. |
+| Maintainer station | [#68](https://github.com/lab-401/icopy-x/pull/68): maintained Classic reference read and one complete Windows PC-mode round trip passed; later menu candidate also passed the reference read | Inspect/reconcile the battery-interrupted session, then complete maintained cancellation acceptance. PC-mode evidence does not cover other hosts, endurance or mass-storage transfers. |
 | Releases | [#69](https://github.com/lab-401/icopy-x/pull/69): complete candidate archives; publication requires exact build/QEMU/host evidence and asset hashes | Maintainer release decision and change-specific physical evidence. A passing release gate is not hardware certification. |
-| ICS Decoder | Host protocol/ownership regressions and QEMU absent/hotplug flows; #82 removes Move, #83 gates presence, #85 removes contributor About | Latest menu changes need device smoke checks. Accessory unavailable: genuine discovery, capture, disconnect and write/readback remain blocked. |
+| ICS Decoder | Host protocol/ownership regressions and QEMU absent/hotplug flows; #82 removes Move, #83 gates presence, #85 removes contributor About. Physical menu sweep confirmed Move absent, M1 inert and ICS hidden without hardware | Accessory unavailable: genuine discovery, capture, disconnect and write/readback remain blocked. Contributor About removal has host/QEMU evidence; absent hardware prevented ordinary physical navigation into that menu. |
 | Factory/no-flash | Separate package/Lua/client family and QEMU command fixtures | Real factory-firmware device acceptance; the current physical device does not establish it. |
 | Installation/flashing | Package/build checks and earlier reversible staging observations | Standard update/restart/recovery and fullimage flashing on stable power. Not covered by read or PC-mode passes. |
 
@@ -65,11 +65,12 @@ hardware and an interrupted session remain explicit gaps, never implicit passes.
 
 ## Next physical acceptance work
 
-1. With a charged device and Ethernet hub, verify installed identities and stage
-   the reviewed menu candidate with a rollback. Confirm Move is gone and ICS is
-   hidden without the accessory; perform a known Classic read and exit/re-entry.
-2. After correcting the maintained cancellation guard, repeat its cancel-read
-   operation against the enrolled Classic reference. Preserve unsuccessful cases.
+1. After recharging, inspect boot/application identity and the retained lease of
+   the interrupted menu session. Resolve it explicitly without replaying input.
+   Menu sweep and full Classic read passed before the interruption.
+2. Repeat maintained cancel-read against the enrolled Classic reference with
+   adequate power. The numeric guard fix is merged, but the final screen mismatch
+   in the latest attempt remains unexplained. Preserve unsuccessful cases.
 3. Retest EM410x recovery and the supplied Ultralight-compatible tag when present.
 4. Schedule factory/no-flash, real ICS and standard installation/flashing checks
    separately with appropriate hardware and stable power. Do not flash merely to
@@ -91,6 +92,12 @@ passing tests do not remove their dependency advisories. Modern host tooling use
 patched pins, and Dependabot checks test/station requirements and Actions weekly.
 Legacy dependency alerts remain open; see [TEST_DEPENDENCIES.md](TEST_DEPENDENCIES.md).
 These changes are separate from a device-runtime migration.
-The proposed model reviewer remains advisory future work and is not an active
-CI check. Human scope review is still required, especially for boot/update,
-translation, firmware, Lua selection, USB ownership and build changes.
+The [Astra advisory pilot](../tools/auto_review/README.md) from #88 is available as
+a manual workflow on trusted main. Its 22 offline contracts passed on Linux and
+Windows. [Hosted preparation 39248718899](https://github.com/lab-401/icopy-x/actions/runs/39248718899)
+completed without an API key and produced the same immutable snapshot digest as
+the local historical-menu trial. This validates hosted collection, not model
+quality. Live Astra evaluation awaits `OPENAI_API_KEY` in the main-only
+`astra-review` environment. Automatic invocation/publication and a model gate
+remain unimplemented. Human scope review is still required, especially for
+boot/update, translation, firmware, Lua selection, USB ownership and build changes.
