@@ -112,8 +112,11 @@ accepted and rejected changes, including mixed Lua families, serial ownership,
 contributor-only device credits, justified accessory startup work and clean fixes.
 Have a maintainer label expected findings independently. Record misses, false
 positives, scope decisions, context gaps, token usage and latency. A response
-matching the JSON schema is not evidence that its reasoning is correct. Live
-quality evaluation and an automatic PR integration are still pending this pilot.
+matching the JSON schema is not evidence that its reasoning is correct. The
+[calibration corpus](calibration/README.md) preserves predeclared cases,
+source-based assessments and final live reports. It is maintained separately
+from ordinary contributor tests. Context selection and automatic PR integration
+remain follow-up work; semantic quality cannot be inferred from schema validity.
 
 For an optional local run, use `python -m tools.auto_review.cli prepare` or
 `review` with `--repo`, `--base`, `--head`, `--purpose`, repeated `--context` and

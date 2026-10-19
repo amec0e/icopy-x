@@ -87,6 +87,17 @@ requires investigation; it must not be bypassed by dropping a patch or accepting
 partial assets. The release gate keeps draft assets private until every digest
 matches. See [RELEASE_PIPELINE.md](RELEASE_PIPELINE.md) for dry runs and recovery.
 
+[PR #95](https://github.com/lab-401/icopy-x/pull/95) also closes a standalone
+builder gap found during reviewer calibration: missing, empty or non-file inputs
+for the selected PM3 client/Lua pair now fail before writing a package, including
+dry runs. Both families retain separate inputs and an existing output survives
+these preflight failures. The new regression reproduced a successful incomplete
+build before the fix. All host/build/reviewer checks and
+[QEMU run 39266710824](https://github.com/lab-401/icopy-x/actions/runs/39266710824)
+passed for tested head `a39985c530dd3fbc573dcdb53d9c93dd8d8becb6`; the merge tree
+matched it. This presence/size check does not replace provenance checks or
+physical firmware acceptance.
+
 The device's old interpreter and pinned runtime remain compatibility constraints;
 passing tests do not remove their dependency advisories. Modern host tooling uses
 patched pins, and Dependabot checks test/station requirements and Actions weekly.
@@ -107,9 +118,17 @@ introduced defects; the last reached complete advisory source coverage after
 bounded reference searches and caller context were supplied in
 [run 39261258391](https://github.com/lab-401/icopy-x/actions/runs/39261258391).
 Stable source prompts also demonstrated cache reuse on both later review passes.
-Context selection is still manual; complete source coverage is not a test pass,
-device acceptance or merge approval. The next work is the broader labeled
-evaluation before automatic invocation or publication. See
+The subsequent [domain corpus](../tools/auto_review/calibration/README.md)
+contains nine original cases and one changed-context follow-up. Eight source
+comparisons returned 24 validated responses and found the seeded packaging,
+serial-alias and credits defects; an unexpected builder omission led to #95.
+Four final reviews retained specific context gaps. Credits remediation was too
+permissive about retaining a static feature-version submenu. Both attempts at
+the larger accessory-startup comparison timed out before returning a review,
+leaving that scope judgment unassessed and their API usage unknown.
+Context selection, that policy boundary and transport reliability require work
+before automatic invocation/publication. Complete source coverage is not a test
+pass, device acceptance or merge approval. See
 [the evaluation record](../tools/auto_review/EVALUATION.md) for exact revisions,
 findings and usage. The API key is in the main-only
 `astra-review` environment. Automatic invocation/publication and a model gate
