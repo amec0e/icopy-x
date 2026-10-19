@@ -64,8 +64,9 @@ markers posted by contributors. A reservation is written before the model job
 can start, and remains after failures or stale results, so an ambiguous response
 does not trigger another paid review. Rerunning a failed Actions job cannot
 resubmit a generation. A completed run whose reservation was never finalized is
-reconciled to incomplete on a later scan, without retrying. For intentional
-repeat evaluation, use the manual pilot after inspecting prior accounting.
+reconciled on a later scan while the PR remains open, without retrying. A source
+change marks the abandoned reservation stale; a missing run record is incomplete.
+For intentional repeat evaluation, use the manual pilot after inspecting prior accounting.
 
 The rolling allowance counts durable reservations, including closed PRs and
 failed/stale attempts, conservatively even if the API was never reached. A
