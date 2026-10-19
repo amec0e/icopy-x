@@ -78,6 +78,15 @@ class BackgroundTests(unittest.TestCase):
         self.assertEqual(self.clock.now, 130)
         self.assertEqual(self.operations(sender).count('submit'), 1)
 
+    def test_poll_bound_scales_past_old_180_poll_limit(self):
+        sender = MagicMock(side_effect=lambda *a, **k: self.response(
+            'completed' if self.clock.now >= 400 else 'in_progress'))
+        self.assertEqual(self.run_response(sender, deadline=5400)['status'], 'completed')
+        self.assertEqual(self.clock.now, 400)
+        self.assertEqual(self.attempt['poll_count'], 200)
+        self.assertEqual(self.attempt['poll_limit'], 2700)
+        self.assertEqual(self.operations(sender).count('submit'), 1)
+
     def test_lost_initial_acknowledgement_is_never_resubmitted(self):
         sender = MagicMock(side_effect=TimeoutError('sensitive failure'))
         with self.assertRaises(TimeoutError):

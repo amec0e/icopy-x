@@ -45,7 +45,8 @@ jobs:
   advisory:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    # 90-minute generation baseline plus collection, HTTP cleanup and artifacts.
+    timeout-minutes: 100
     environment: astra-review
     steps:
       # This checkout supplies the trusted collector, policy and reviewer only.

@@ -14,6 +14,8 @@ from .errors import ValidationError
 from .snapshots import canonical, digest
 
 MODEL = 'gpt-6-astra'
+DEFAULT_OUTPUT_TOKENS = 128000
+DEFAULT_REVIEW_BUDGET_SECONDS = 5400
 PASSES = (
     'Purpose and scope: classify every changed file and explain necessary core dependencies.',
     'Domain audit: follow control/data flow, challenge correctness and compatibility with supplied context.',
@@ -148,17 +150,21 @@ def numbered_source(bundle):
     return rendered
 
 
-def review(bundle, policy, key, request_fn=None, max_output_tokens=6000, timeout=120, checkpoint=None):
+def review(bundle, policy, key, request_fn=None, max_output_tokens=DEFAULT_OUTPUT_TOKENS,
+           timeout=120, checkpoint=None, review_budget_seconds=DEFAULT_REVIEW_BUDGET_SECONDS):
     if bundle['gaps']:
         raise ValueError('Snapshot has coverage gaps; no model request sent')
     if not key:
         raise ValueError('API key is not configured')
-    if not 1000 <= max_output_tokens <= 16000 or not 10 <= timeout <= 180:
+    if (type(max_output_tokens) is not int or not 1000 <= max_output_tokens <= DEFAULT_OUTPUT_TOKENS or
+            type(timeout) is not int or not 10 <= timeout <= 180 or
+            type(review_budget_seconds) is not int or not 30 <= review_budget_seconds <= DEFAULT_REVIEW_BUDGET_SECONDS):
         raise ValueError('Review limits outside allowed range')
     report = dict(status='INCOMPLETE', advisory=True, model_requested=MODEL,
                   snapshot_sha256=digest(bundle), base=bundle['base'], head=bundle['head'],
                   policy_sha256=digest(policy), prompt_format='numbered-source-v3',
-                  transport='background-v1', review_budget_seconds=3 * timeout,
+                  transport='background-v1', review_budget_seconds=review_budget_seconds,
+                  max_output_tokens_per_pass=max_output_tokens, max_generations=len(PASSES),
                   attempts=[], calls=[], review=None)
     rendered = numbered_source(bundle)
     instructions = (policy + '\n'
@@ -177,7 +183,7 @@ def review(bundle, policy, key, request_fn=None, max_output_tokens=6000, timeout
     source = dict(role='user', content=[dict(type='input_text',
         text=json.dumps(dict(snapshot=rendered), ensure_ascii=True),
         prompt_cache_breakpoint={'mode': 'explicit'})])
-    deadline = time.monotonic() + 3 * timeout
+    deadline = time.monotonic() + review_budget_seconds
     previous = None
     for task in PASSES:
         remaining = deadline - time.monotonic()
