@@ -64,7 +64,7 @@ jobs:
     outputs:
       release_tag: ${{ steps.intent.outputs.release_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -79,7 +79,7 @@ jobs:
     needs: [cross-compile-pm3, cross-compile-pm3-firmware]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -242,7 +242,7 @@ jobs:
       PM3_TAG: ${{ needs.resolve-pm3-tag.outputs.pm3_tag }}
       PM3_COMMIT: ${{ needs.resolve-pm3-tag.outputs.pm3_commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -354,7 +354,7 @@ jobs:
       PM3_TAG: ${{ needs.resolve-pm3-tag.outputs.pm3_tag }}
       PM3_COMMIT: ${{ needs.resolve-pm3-tag.outputs.pm3_commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -404,7 +404,7 @@ jobs:
       PM3_TAG: ${{ needs.resolve-pm3-tag.outputs.pm3_tag }}
       PM3_COMMIT: ${{ needs.resolve-pm3-tag.outputs.pm3_commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -451,7 +451,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -509,7 +509,7 @@ jobs:
       PM3_TAG: ${{ needs.resolve-pm3-tag.outputs.pm3_tag }}
       PM3_COMMIT: ${{ needs.resolve-pm3-tag.outputs.pm3_commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -544,7 +544,7 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -610,7 +610,7 @@ jobs:
       PM3_TAG: ${{ needs.resolve-pm3-tag.outputs.pm3_tag }}
       PM3_COMMIT: ${{ needs.resolve-pm3-tag.outputs.pm3_commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
