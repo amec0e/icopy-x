@@ -512,10 +512,11 @@ Maintain the following work alongside advisory operation:
   missing callers, latency and actual usage before tightening limits. Add fresh
   command-translation, scope-splitting and boot/recovery cases with independently
   assessed expectations as evidence becomes available.
-- Follow up the startup review's confirmed test/logic concerns: the swallowed
-  QEMU PM3-open assertion, menu focus on return, reverse serial-handle handoff
-  and Windows attachment-cache continuity. These need focused regressions and
-  fixes; successful reviewer delivery does not resolve them.
+- The startup review's four test/logic follow-ups now have focused corrections
+  and regressions: the QEMU PM3-open assertion, return focus, reverse serial
+  handoff and Windows attachment continuity. See the
+  [correction record and remaining physical checks](../../docs/reviews/2026-10-19-decoder-followups.md).
+  These fixes are separate evidence from successful reviewer delivery.
 - Treat disconnected saved-credential navigation as a product decision. Do not
   undo the maintainer's requirement to hide the decoder menu without hardware.
   Historical contributor credits are already removed from current main.
