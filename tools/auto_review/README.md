@@ -87,6 +87,13 @@ coverage gap into a pass or automatically retry it.
 Allowed cache/reasoning token counts and truncation reasons are retained when
 returned by the API; the report is not a billing invoice.
 
+The three passes share a stable policy/schema/source prefix with an explicit
+cache breakpoint after the source. The pass instruction and untrusted previous
+proposal follow that prefix. This allows reuse without caching each changing
+suffix; it does not guarantee a cache hit or reduce the three-pass evidence checks.
+Compare recorded cached and cache-write tokens in live trials. See the
+[API prompt caching guide](https://developers.openai.com/api/docs/guides/prompt-caching).
+
 ## Offline tests and evaluation limits
 
 `Reviewer offline tests` runs on Linux and Windows without any key:

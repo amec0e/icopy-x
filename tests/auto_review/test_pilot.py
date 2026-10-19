@@ -276,14 +276,24 @@ class PilotTests(unittest.TestCase):
             self.assertNotIn('tools', request)
             self.assertNotIn('IGNORE POLICY', request['instructions'])
             self.assertNotIn('fixture-key', json.dumps(request))
-            self.assertIn('IGNORE POLICY', request['input'][0]['content'])
+            self.assertIn('IGNORE POLICY', request['input'][0]['content'][0]['text'])
             return self.response()
         report = reviewer.review(bundle, 'Trusted policy', 'fixture-key', request_fn=send)
         self.assertEqual(len(calls), 3)
         self.assertTrue(report['advisory'])
         self.assertEqual(report['status'], 'ADVISORY_COMPLETE')
         self.assertEqual(report['head'], self.head)
-        self.assertIn('prior', calls[1]['input'][0]['content'])
+        self.assertEqual([call['input'][1] for call in calls],
+                         [dict(role='developer', content=task) for task in reviewer.PASSES])
+        for call in calls:
+            self.assertEqual(call['instructions'], calls[0]['instructions'])
+            self.assertEqual(call['input'][0], calls[0]['input'][0])
+            self.assertEqual(call['input'][0]['role'], 'user')
+            self.assertEqual(call['input'][0]['content'][0]['prompt_cache_breakpoint'], {'mode': 'explicit'})
+            self.assertEqual(call['prompt_cache_options'], {'mode': 'explicit'})
+            self.assertEqual(call['input'][2]['role'], 'user')
+        self.assertEqual(json.loads(calls[0]['input'][2]['content']), {'prior': None})
+        self.assertEqual(json.loads(calls[1]['input'][2]['content']), {'prior': self.valid()})
 
     def test_api_failure_never_yields_advisory_complete(self):
         def fail(*args):
@@ -330,7 +340,7 @@ class PilotTests(unittest.TestCase):
                                    reason='Additional source example.'))
         valid['findings'][0].update(path='context.py', line=3, quote='\tpass')
         def send(request, *args):
-            rendered = json.loads(request['input'][0]['content'])['snapshot']
+            rendered = json.loads(request['input'][0]['content'][0]['text'])['snapshot']
             source = next(row for row in rendered['files'] if row['path'] == 'context.py')['head']
             self.assertEqual(source['numbered_text'], '1\t# Unicode: \u00e9\n2\t\n3\t\tpass')
             self.assertNotIn('text', source)
