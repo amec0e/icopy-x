@@ -92,7 +92,11 @@ its USB/accessory tests remain blocked. No writes to source cards are authorized
 by these read cases. Manually requested button navigation can reach other app
 functions, so the operator must inspect its screen precondition.
 
-## PC-mode session at the next device connection
+## PC-mode session procedure
+
+The first complete supervised round trip passed; see the
+[19 October acceptance record](PHYSICAL_ACCEPTANCE_20261019.md). Use this
+procedure for later PC-mode acceptance, with fresh sessions and exact identities.
 
 Charge the device, attach the Ethernet hub, and prepare the matching host client
 and a known read fixture. Start a session and perform one normal `read` first.
