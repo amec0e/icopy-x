@@ -1,0 +1,83 @@
+name: Astra advisory pilot
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Prepare evidence, or run the paid three-pass advisory review
+        type: choice
+        options: [prepare, review]
+        default: prepare
+      base:
+        description: Full base commit SHA (must be an ancestor of head)
+        type: string
+        required: true
+      head:
+        description: Full candidate commit SHA
+        type: string
+        required: true
+      purpose:
+        description: Stated purpose of the PR (review context, not policy)
+        type: string
+        required: true
+      context:
+        description: JSON array of additional repository paths for caller/contract context
+        type: string
+        default: '[]'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: astra-advisory-pilot
+  cancel-in-progress: false
+
+jobs:
+  advisory:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    environment: astra-review
+    steps:
+      # This checkout supplies the trusted collector, policy and reviewer only.
+      # Candidate trees are never checked out or imported.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Fetch immutable objects without executing candidate code
+        env:
+          REVIEW_BASE: ${{ inputs.base }}
+          REVIEW_HEAD: ${{ inputs.head }}
+          REVIEW_CONTEXT: ${{ inputs.context }}
+          REVIEW_PURPOSE: ${{ inputs.purpose }}
+        run: python -m tools.auto_review.hosted fetch
+      - name: Prepare evidence (no API key)
+        if: inputs.operation == 'prepare'
+        env:
+          REVIEW_BASE: ${{ inputs.base }}
+          REVIEW_HEAD: ${{ inputs.head }}
+          REVIEW_CONTEXT: ${{ inputs.context }}
+          REVIEW_PURPOSE: ${{ inputs.purpose }}
+        run: python -m tools.auto_review.hosted prepare
+      - name: Run advisory review
+        if: inputs.operation == 'review'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          REVIEW_BASE: ${{ inputs.base }}
+          REVIEW_HEAD: ${{ inputs.head }}
+          REVIEW_CONTEXT: ${{ inputs.context }}
+          REVIEW_PURPOSE: ${{ inputs.purpose }}
+        run: python -m tools.auto_review.hosted review
+      - name: Preserve evidence and advisory result
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: astra-advisory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: review-evidence/
+          if-no-files-found: warn
+          retention-days: 30

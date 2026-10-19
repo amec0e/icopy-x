@@ -64,7 +64,7 @@ jobs:
     outputs:
       release_tag: ${{ steps.intent.outputs.release_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -79,7 +79,7 @@ jobs:
     needs: [cross-compile-pm3, cross-compile-pm3-firmware]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -242,7 +242,7 @@ jobs:
       PM3_TAG: ${{ needs.resolve-pm3-tag.outputs.pm3_tag }}
       PM3_COMMIT: ${{ needs.resolve-pm3-tag.outputs.pm3_commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -338,7 +338,7 @@ jobs:
           fi
 
       - name: Upload PM3 client artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pm3-client-arm
           path: |
@@ -354,7 +354,7 @@ jobs:
       PM3_TAG: ${{ needs.resolve-pm3-tag.outputs.pm3_tag }}
       PM3_COMMIT: ${{ needs.resolve-pm3-tag.outputs.pm3_commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -389,7 +389,7 @@ jobs:
           cat /tmp/proxmark3/pm3_manifest.json
 
       - name: Upload firmware artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pm3-firmware
           path: |
@@ -404,7 +404,7 @@ jobs:
       PM3_TAG: ${{ needs.resolve-pm3-tag.outputs.pm3_tag }}
       PM3_COMMIT: ${{ needs.resolve-pm3-tag.outputs.pm3_commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -435,7 +435,7 @@ jobs:
           cp client/dictionaries/*.dic /tmp/out/ 2>/dev/null || true
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: iceman-client-linux
           path: /tmp/out/
@@ -451,7 +451,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -496,7 +496,7 @@ jobs:
           done
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: iceman-client-windows
           path: ${{ github.workspace }}/client-out/windows/
@@ -509,7 +509,7 @@ jobs:
       PM3_TAG: ${{ needs.resolve-pm3-tag.outputs.pm3_tag }}
       PM3_COMMIT: ${{ needs.resolve-pm3-tag.outputs.pm3_commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -534,7 +534,7 @@ jobs:
             --binary client/proxmark3 --output "/tmp/out/macos/pm3_client_build.json"
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: iceman-client-macos
           path: /tmp/out/macos/
@@ -544,7 +544,7 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -590,13 +590,13 @@ jobs:
         run: python tools/build_ipk.py --sn UNIVERSAL --no-flash --output icopy-x-noflash.ipk
 
       - name: Upload flash IPK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: icopy-x-flash-ipk
           path: icopy-x-flash.ipk
 
       - name: Upload no-flash IPK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: icopy-x-noflash-ipk
           path: icopy-x-noflash.ipk
@@ -610,7 +610,7 @@ jobs:
       PM3_TAG: ${{ needs.resolve-pm3-tag.outputs.pm3_tag }}
       PM3_COMMIT: ${{ needs.resolve-pm3-tag.outputs.pm3_commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -686,7 +686,7 @@ jobs:
         run: python3 tools/release_ci/bundle.py manifest
 
       - name: Retain complete release candidate
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-candidate
           path: |

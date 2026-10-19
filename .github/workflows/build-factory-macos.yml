@@ -8,7 +8,7 @@ jobs:
     name: Factory PM3 Client (macOS)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: brew install readline pkg-config
@@ -38,7 +38,7 @@ jobs:
           ls -la client/proxmark3
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: factory-pm3-macos
           path: /tmp/factory_pm3/client/proxmark3
