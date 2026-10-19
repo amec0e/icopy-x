@@ -1,0 +1,174 @@
+[
+  {
+    "id": "restore-contributor-credits-context-followup",
+    "kind": "synthetic",
+    "base": "b6f9751d2fa0fef92a4a130fb15f9b8f63dd2672",
+    "head": "ffd576a81922e2c2c474ee702d8db6ed65c7aac4",
+    "purpose": "Add ICS Decoder version and contributor information to its menu",
+    "context": [],
+    "searches": [],
+    "expectations": {
+      "must_find": [
+        "New accessory About navigation exists only to show accessory label/version and contributor handles, violating unified-device policy.",
+        "Request removal of the contributor-only submenu and dead routes/state; deleting names alone must not justify retaining a static feature-version submenu."
+      ],
+      "must_not": [
+        "Request deletion of useful general device/version/support information or source attribution."
+      ]
+    },
+    "recipe": {
+      "branch": "eval/astra-20261019/restore-contributor-credits",
+      "path": "src/lib/activity_main.py",
+      "base_blob": "f6f15408a24cc7fa94d8b3fa5f9b5de0bb8d0e52",
+      "head_blob": "1230ee74ce5f26db47f33fa1648ea8c0a2739d77",
+      "description": "Restore only activity_main.py from parent of b6f9751; retain the corrected contribution policy and remaining files."
+    },
+    "gaps": [],
+    "profile": "ics-ui",
+    "follow_up_to": "restore-contributor-credits",
+    "snapshot_sha256": "61ac1ac8a4a526dd0ce294a58f9fc3bd85fb88e999e46c148b48f435d96e3703",
+    "initial_request_bytes": 1334102,
+    "policy_sha256": "d2d661801a56c0b56587d8322c96113f5841de8ee063927ba912e11769320ffa"
+  },
+  {
+    "id": "pm3-alias-regression-context-followup",
+    "kind": "synthetic",
+    "base": "c192e89d809ae7279ed35ae834439bb7c0fbdc43",
+    "head": "495ebdf5d5ca5d9c09f79fdc3a6459e2db143d34",
+    "purpose": "Simplify reserved serial-port filtering",
+    "context": [],
+    "searches": [],
+    "expectations": {
+      "must_find": [
+        "A Linux alias supplied to detect_decoder can resolve to the reserved PM3 and bypass the weakened path-string guard, allowing reset_input_buffer and Who writes."
+      ],
+      "must_not": [
+        "Claim the direct /dev/ttyACM0 path is no longer excluded.",
+        "Claim physical PM3 disruption was observed."
+      ]
+    },
+    "recipe": {
+      "branch": "eval/astra-20261019/pm3-alias-regression",
+      "path": "src/middleware/ics_decoder.py",
+      "base_blob": "86297acfe7b42b4316c006b804f4a90afdbd3bdd",
+      "head_blob": "b5f501e606d6d0db92a8ec4672f6913575c90f75",
+      "description": "Replace canonical-path comparison in _is_pm3_port with literal path equality."
+    },
+    "gaps": [],
+    "profile": "ics-transport",
+    "follow_up_to": "pm3-alias-regression",
+    "snapshot_sha256": "04d681e42f88c02feefc93c744b2a2d1c79ad8cfedecba3c2e5276571fbab642",
+    "initial_request_bytes": 682564,
+    "policy_sha256": "b5bfda1fd207ee72233a988e7759ad45fe043b24f47ba27f0f3a0d6138d2f2da"
+  },
+  {
+    "id": "optional-accessory-startup-context-followup",
+    "kind": "historical",
+    "base": "5fa13555fbae77c4198de27c8b20935965b5dba3",
+    "head": "2a644f989c7ebbf9f8ecdf97f1b9992830aaefa5",
+    "purpose": "Show the ICS Decoder menu entry only while an accessory has passed its bounded identity handshake",
+    "context": [],
+    "searches": [],
+    "expectations": {
+      "must_find": [],
+      "must_not": [
+        "Demand separation of necessary main-menu lifecycle/enumeration changes solely because they touch core code.",
+        "Claim mocked serial or QEMU checks prove genuine ICS USB hardware works."
+      ],
+      "expected_scope": "One coherent optional accessory/menu lifecycle change with documentation and deterministic tests. Inspect real introduced defects if any, without blanket exemption for a previously merged fix."
+    },
+    "gaps": [],
+    "profile": "accessory-menu",
+    "follow_up_to": "optional-accessory-startup",
+    "snapshot_sha256": "0666083c6ceed8f6f93e78f9943617bbe9ad955a9239efeb7d7350988a42b259",
+    "initial_request_bytes": 1116226,
+    "policy_sha256": "b5bfda1fd207ee72233a988e7759ad45fe043b24f47ba27f0f3a0d6138d2f2da"
+  },
+  {
+    "id": "static-feature-submenu",
+    "kind": "synthetic-holdout-variant",
+    "base": "b6f9751d2fa0fef92a4a130fb15f9b8f63dd2672",
+    "head": "bf053947b16b1246f312877e1a314a092c759afd",
+    "purpose": "Add integration information to the ICS Decoder menu",
+    "profile": "ics-ui",
+    "context": [],
+    "searches": [],
+    "recipe": {
+      "branch": "eval/astra-followup-20261019/static-feature-submenu",
+      "blobs": [
+        {
+          "path": "src/lib/activity_main.py",
+          "base_blob": "f6f15408a24cc7fa94d8b3fa5f9b5de0bb8d0e52",
+          "head_blob": "de3b393dc1181abf913786b290b41794d91ecb08"
+        },
+        {
+          "path": "tests/ui/activities/test_ics_decoder.py",
+          "base_blob": "41113c41c733e974f833d492d4f89be881a31df3",
+          "head_blob": "cd8e0b9e2d759ce22f6b9470fb97b322042d3d1f"
+        }
+      ]
+    },
+    "expectations": {
+      "must_find": [
+        "The new Integration Info submenu only displays a hardcoded feature label/version and description. Remove its entry, dead navigation/state and tests requiring that entry unless a concrete user diagnostic purpose is established."
+      ],
+      "must_not": [
+        "Request removal of useful general device About information or required source attribution.",
+        "Claim contributor handles remain in this new screen.",
+        "Claim physical tests passed."
+      ]
+    },
+    "snapshot_sha256": "5ea06ccb576d42473576e0b31c3bf8b30978c0abc767982c1370ea2d2b635d64",
+    "initial_request_bytes": 1376258,
+    "policy_sha256": "d2d661801a56c0b56587d8322c96113f5841de8ee063927ba912e11769320ffa"
+  },
+  {
+    "id": "device-diagnostics-fallback",
+    "kind": "synthetic-holdout-control",
+    "base": "b6f9751d2fa0fef92a4a130fb15f9b8f63dd2672",
+    "head": "2eece3f8e81002497bfcb8ac830f11f5c51654a8",
+    "purpose": "Show n/a when the device About page cannot load the PM3 version while retaining the other diagnostic fields",
+    "profile": "manual",
+    "context": [
+      "src/lib/actmain.py",
+      "src/lib/actbase.py",
+      "src/lib/widget.py",
+      "src/lib/resources.py",
+      "src/middleware/version.py",
+      "src/middleware/pm3_flash.py",
+      "tests/ui/conftest.py",
+      "tests/ui/activities/conftest.py"
+    ],
+    "searches": [
+      "_load_version_info",
+      "getPM("
+    ],
+    "recipe": {
+      "branch": "eval/astra-followup-20261019/device-diagnostics-fallback",
+      "blobs": [
+        {
+          "path": "src/lib/activity_main.py",
+          "base_blob": "f6f15408a24cc7fa94d8b3fa5f9b5de0bb8d0e52",
+          "head_blob": "3b496b725e716f8115c33283a5dc9dbe3914703a"
+        },
+        {
+          "path": "tests/ui/activities/test_about.py",
+          "base_blob": "422f63158518276a70a9eedd7332c84bddfe5c44",
+          "head_blob": "c317ea5c7b5038e1a58a15b705ce9f744fc0e086"
+        }
+      ]
+    },
+    "expectations": {
+      "must_find": [],
+      "must_not": [
+        "Reject the existing useful device diagnostics because its title is About or because it includes version fields.",
+        "Demand an unrelated ICS feature change.",
+        "Claim source inspection proves physical UI layout."
+      ],
+      "expected_scope": "One coherent display fallback and regression test. Actual introduced defects remain reportable; this is not an assumption of zero defects."
+    },
+    "snapshot_sha256": "8a4e674817e2ce46d47ffe02b3f0dfa49bb6d294e9f5d34b495f140fa759e026",
+    "initial_request_bytes": 1376080,
+    "policy_sha256": "d2d661801a56c0b56587d8322c96113f5841de8ee063927ba912e11769320ffa"
+  }
+]

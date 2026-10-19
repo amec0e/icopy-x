@@ -302,7 +302,7 @@ an invoice or a typical-PR cost estimate. Large unchanged activity files dominat
 some inputs, making context selection an operational concern as well as a
 coverage issue.
 
-## Acceptance and next work
+## Acceptance after the initial domain series
 
 The service-account/GitHub path works and the diagnostic corpus has found useful
 defects. The earlier five post-diagnostic trials returned fifteen validated
@@ -336,3 +336,115 @@ statistical quality score or basis for automatic publication.
 The environment secret belongs in GitHub; a developer workstation is not part
 of the hosted execution path. Deterministic host/build/QEMU checks and maintainer
 review continue to protect merges; model completion cannot replace them.
+
+## Context, policy and attempt diagnostics follow-up
+
+[#97](https://github.com/lab-401/icopy-x/pull/97) adds durable attempt diagnostics;
+[#98](https://github.com/lab-401/icopy-x/pull/98) adds bounded context profiles and
+avoids repeating identical unchanged source in prompts;
+[#99](https://github.com/lab-401/icopy-x/pull/99) clarifies complete removal of
+contributor-only submenus. Each passed host, reviewer, full-build and both-IPK
+QEMU checks before merge. Their merged trees matched their tested heads. The
+reviewer has 48 offline tests. These changes do not enable automatic publication
+or change application runtime behavior.
+
+The [follow-up methodology](calibration/README.md#context-and-policy-follow-up-19-october-2026)
+and immutable manifests distinguish repeated regressions from fresh synthetic
+variants, and original-policy context trials from clarified-policy trials.
+
+The alias regression returned three validated responses in
+[run 39276228353](https://github.com/lab-401/icopy-x/actions/runs/39276228353).
+It retained the expected P1 alias bypass and completed source coverage with the
+missing activity caller supplied. The actual literal PM3 path remains excluded;
+the defect is accepting an alias to it. It did not claim physical disruption.
+
+The credits regression returned three validated responses in
+[run 39277573447](https://github.com/lab-401/icopy-x/actions/runs/39277573447).
+The final remedy removes the contributor-only row, helper, state, unused feature
+version and navigation branches. It explicitly rejects deleting handles while
+keeping the same static submenu, retains the correct three-row test, and
+preserves useful device diagnostics and legal/source attribution. Supplied
+ICSInfoView context closes the earlier gap. Context/rendering and policy changed
+together, so this result cannot be attributed solely to policy wording.
+
+The static-feature submenu variant returned three validated responses in
+[run 39278295702](https://github.com/lab-401/icopy-x/actions/runs/39278295702).
+It correctly distinguished the unsupported static destination from contributor
+branding: no names or promotional links were added. The P2 remedy removes the
+row, helper, state, version, navigation branches and fourth-row test expectations,
+while preserving credential details and useful diagnostics. Both changed files
+form one focused addition; no split or unrelated hardware acceptance was demanded.
+This authored counterexample supports the narrow policy boundary, not a general
+false-positive or accuracy estimate.
+
+GitHub run/job status queries continued to report waiting after this trial's
+final artifact existed. A cancellation request was refused because the run was
+completed; nothing was cancelled or resubmitted. Assessment uses the independently
+validated artifact and its attempt timestamps. The status discrepancy is separate
+from the startup API timeout.
+
+The useful-diagnostics control returned three validated responses in
+[run 39281585898](https://github.com/lab-401/icopy-x/actions/runs/39281585898).
+It preserved the general About page and accepted the coherent purpose, but found
+an incomplete implementation of the synthetic change's stated outcome. Independent
+source inspection confirms that `version.getPM()` normally returns `?` on failed
+or unusable PM3 queries. About stores/renders that sentinel directly, bypassing
+the exception handler changed to `n/a`. The new missing-API test covers only that
+handler. Normalizing the sentinel and testing the provider/render path is a
+supported completion request, not an introduced communication regression.
+
+This control therefore supports preservation of useful diagnostics but is not a
+finding-free clean example. Its expected label was a candidate, not an instruction
+to discard real findings. The synthetic UI change remains unmerged; this finding
+does not justify changing current main to use `n/a`. No hardware checks were
+requested and no candidate tests were executed.
+
+The accessory-startup comparison again returned no review in
+[run 39276572689](https://github.com/lab-401/icopy-x/actions/runs/39276572689).
+The first request measured 1,116,226 bytes and failed after 120.125 seconds with
+a 120-second socket timeout. Its client correlation ID was preserved, but no
+HTTP status, server request ID or usage returned. Delivery, processing and cost
+remain unknown. No retry or limit increase followed. This is the third failed
+controlled comparison, including the earlier full and reduced snapshots; none
+establishes that input size caused the timeout. Necessary accessory startup
+dependencies still lack a live scope judgment in this series.
+
+The five comparisons made thirteen generation requests: twelve validated responses
+across four complete source advisories, plus one timeout without a response. No
+automatic retry was made. Returned usage totals 3,870,279 input tokens, 15,818
+output tokens, 2,577,124 cached input tokens and 1,288,562 cache-write tokens.
+Recorded attempt time totals 539.828 seconds, including the failed 120.125-second
+request whose usage is unknown. These are accounting observations, not an invoice
+or a general accuracy/cost estimate. Exact reports and separate assessments are
+preserved in the [follow-up results](calibration/20261019-followup/results.json).
+
+## Transport follow-up design
+
+The current adapter makes a synchronous Responses POST with a 120-second socket
+timeout. It cannot distinguish server queueing or reasoning from connection
+trouble when no response headers arrive. A client correlation ID helps trace an
+attempt; it is not proof of delivery or an idempotency key. Do not automatically
+resubmit an ambiguous request or record missing usage as zero cost.
+
+The next transport change should use one background submission per pass, then
+poll the returned response ID under an explicit overall deadline. OpenAI's
+[background-mode documentation](https://developers.openai.com/api/docs/guides/background)
+describes queued/running status, polling and cancellation for long reasoning
+requests; `store: false` still involves temporary retention for polling. This
+is a proposed change, not the transport used by the recorded trials.
+
+Preserve the exact model, three-generation cap, source/output budgets, evidence
+validation and main-only secret boundary. Record the effective deadline and
+persist the response ID/status before polling. Reject malformed identities and
+redirects. On expiry, attempt cancellation of a known active job and record
+whether cancellation succeeded; a lost initial response or failed cleanup leaves
+delivery, completion or usage explicitly unknown. Do not silently start a new
+generation after a polling failure. Preserve an earlier validated pass if a later
+one fails.
+
+Offline cases must cover queued/running/completed and failed/incomplete jobs,
+refusals, unexpected models/IDs, deadline expiry, cancellation failure, missing
+initial acknowledgement and checkpoint interruption. Only after those checks and
+ordinary CI pass should a separately bounded startup comparison be submitted.
+Its result must retain, rather than replace, the previous failures. Background
+status improves observability; it does not establish what caused those failures.

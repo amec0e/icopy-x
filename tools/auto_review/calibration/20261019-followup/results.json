@@ -1,0 +1,668 @@
+[
+  {
+    "case": "restore-contributor-credits-context-followup",
+    "run": 39277573447,
+    "trusted_revision": "492441f564df087fab69b4653b9a347412febb38",
+    "url": "https://github.com/lab-401/icopy-x/actions/runs/39277573447",
+    "requests_with_unknown_usage": [],
+    "report": {
+      "status": "ADVISORY_COMPLETE",
+      "advisory": true,
+      "model_requested": "gpt-6-astra",
+      "snapshot_sha256": "61ac1ac8a4a526dd0ce294a58f9fc3bd85fb88e999e46c148b48f435d96e3703",
+      "base": "b6f9751d2fa0fef92a4a130fb15f9b8f63dd2672",
+      "head": "ffd576a81922e2c2c474ee702d8db6ed65c7aac4",
+      "policy_sha256": "d2d661801a56c0b56587d8322c96113f5841de8ee063927ba912e11769320ffa",
+      "prompt_format": "numbered-source-v3",
+      "attempts": [
+        {
+          "task": "Purpose and scope: classify every changed file and explain necessary core dependencies.",
+          "client_request_id": "d37c5f30-a61f-4aa8-bea0-26fc135f29ce",
+          "request_bytes": 1334102,
+          "timeout_seconds": 120,
+          "outcome": "response_received",
+          "started_at": "2026-10-19T15:24:08.608412+00:00",
+          "elapsed_seconds": 46.976,
+          "http_status": 200,
+          "server_request_id": "req_749c214010ed407487818f24739d872b"
+        },
+        {
+          "task": "Domain audit: follow control/data flow, challenge correctness and compatibility with supplied context.",
+          "client_request_id": "85a6e500-195c-4c0f-b83b-fe1afb7e05b7",
+          "request_bytes": 1336693,
+          "timeout_seconds": 120,
+          "outcome": "response_received",
+          "started_at": "2026-10-19T15:24:55.590883+00:00",
+          "elapsed_seconds": 25.097,
+          "http_status": 200,
+          "server_request_id": "req_600d9c8252584bd6bcf09a2a85f33d4c"
+        },
+        {
+          "task": "Evidence challenge: check prior claims and counterexamples; remove unsupported findings and state gaps.",
+          "client_request_id": "f823b70c-c847-4969-a6d9-d1c543e3c193",
+          "request_bytes": 1336657,
+          "timeout_seconds": 120,
+          "outcome": "response_received",
+          "started_at": "2026-10-19T15:25:20.694632+00:00",
+          "elapsed_seconds": 30.724,
+          "http_status": 200,
+          "server_request_id": "req_e680014a6abc44d6864cf6ee33e37dc9"
+        }
+      ],
+      "calls": [
+        {
+          "task": "Purpose and scope: classify every changed file and explain necessary core dependencies.",
+          "id": "resp_09fd50f96411fa37016ad63618e88487d2bfe0602347f00925",
+          "model": "gpt-6-astra",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 359870,
+            "output_tokens": 1346,
+            "total_tokens": 361216,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 359840
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 787
+            }
+          },
+          "client_request_id": "d37c5f30-a61f-4aa8-bea0-26fc135f29ce",
+          "elapsed_seconds": 46.976
+        },
+        {
+          "task": "Domain audit: follow control/data flow, challenge correctness and compatibility with supplied context.",
+          "id": "resp_076f3e4df9c98555016ad63647bf7c87d29c7e0d6500fa56c1",
+          "model": "gpt-6-astra",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 360385,
+            "output_tokens": 958,
+            "total_tokens": 361343,
+            "input_tokens_details": {
+              "cached_tokens": 359840,
+              "cache_write_tokens": 0
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 417
+            }
+          },
+          "client_request_id": "85a6e500-195c-4c0f-b83b-fe1afb7e05b7",
+          "elapsed_seconds": 25.097
+        },
+        {
+          "task": "Evidence challenge: check prior claims and counterexamples; remove unsupported findings and state gaps.",
+          "id": "resp_0f049824114c11a5016ad63660f90487d28ddc59973f2dcc83",
+          "model": "gpt-6-astra",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 360368,
+            "output_tokens": 1206,
+            "total_tokens": 361574,
+            "input_tokens_details": {
+              "cached_tokens": 359840,
+              "cache_write_tokens": 0
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 663
+            }
+          },
+          "client_request_id": "f823b70c-c847-4969-a6d9-d1c543e3c193",
+          "elapsed_seconds": 30.724
+        }
+      ],
+      "review": {
+        "completion": "complete",
+        "files": [
+          {
+            "path": "src/lib/activity_main.py",
+            "reason": "Directly implements the claimed ICS Decoder menu-information change. Reviewed the added content, state and navigation against the supplied launcher, button dispatch, widgets and regression tests. The change is focused, but the contributor-oriented submenu has no established user task or diagnostic purpose.",
+            "reviewed": true,
+            "scope": "purpose"
+          }
+        ],
+        "findings": [
+          {
+            "impact": "Adds contributor credits to the device workflow. Its remaining content\u2014a static feature description and hardcoded version\u2014does not establish a diagnostic purpose. The added row also contradicts the unchanged three-row menu and wraparound expectations in tests/ui/activities/test_ics_decoder.py:480\u2013497.",
+            "line": 10063,
+            "path": "src/lib/activity_main.py",
+            "quote": "            'Contributors:',",
+            "requested_change": "Remove the added About row, _show_about method, STATE_ABOUT, otherwise-unused FEATURE_VERSION, and About-specific branches in _activate, _back and onKeyEvent. Keep attribution in source or GitHub; deleting only the handles while retaining this static submenu is insufficient. Preserve Credential Details and its shared information view, useful general device About information, and required legal notices. Retain the three-row landing regression and validate navigation cleanup with host/QEMU checks.",
+            "severity": "P2",
+            "side": "head",
+            "trigger": "Open ICS Decoder and select the new About row at line 9866. The action routes to _show_about, which displays the contributor heading and handles at lines 10063\u201310065.",
+            "validation": "source_confirmed"
+          }
+        ],
+        "limitations": [
+          "Source review only: no tests were run, CI results verified or hardware operated. The regression-test mismatch is source-confirmed, not an observed test execution.",
+          "No additional source gap was identified for this UI-only delta. This review does not certify pre-existing accessory, threading or PM3 behavior."
+        ],
+        "required_device_checks": [],
+        "summary": "The prior removal finding survives the evidence challenge. The violation is the new contributor-oriented submenu, not the About label or the existing useful device-information screen. Remove the submenu together with its state and routes. Root-menu order, empty root M1 behavior and hardware-operation code are unchanged; no USB, RF or flashing checks are required for this delta. Advisory only; maintainers retain merge and release decisions."
+      }
+    },
+    "assessment": {
+      "outcome": "expected_defect_and_complete_remediation_found",
+      "finding_assessment": "The P2 finding correctly identifies the new credits submenu and unchanged three-row/wraparound test conflict. The remedy explicitly removes the About row, helper, state, unused FEATURE_VERSION and navigation branches, and states that removing handles alone is insufficient. It retains the appropriate three-row regression instead of updating the test to require bad UI.",
+      "policy_assessment": "Preserves Credential Details and its shared view, useful general device About information, source attribution and legal notices. This closes the specific partial-remediation problem in the prior regression trial.",
+      "context_assessment": "The actual ICSInfoView implementation is now supplied. All three responses validated, and the final report identifies no additional source gap for this UI-only delta. Policy and context/rendering changed together here, so do not attribute the result to policy wording alone.",
+      "scope_and_hardware_assessment": "Treats the change as focused but unacceptable UI. Correctly requests no RF, USB or flashing acceptance for this delta and does not claim tests were executed.",
+      "evaluation_limit": "This repeats an earlier known regression. It is not independent evidence of general accuracy."
+    }
+  },
+  {
+    "case": "pm3-alias-regression-context-followup",
+    "run": 39276228353,
+    "trusted_revision": "1979942702004bb63fab2d29a7a29e44d98e4a8b",
+    "url": "https://github.com/lab-401/icopy-x/actions/runs/39276228353",
+    "requests_with_unknown_usage": [],
+    "report": {
+      "status": "ADVISORY_COMPLETE",
+      "advisory": true,
+      "model_requested": "gpt-6-astra",
+      "snapshot_sha256": "04d681e42f88c02feefc93c744b2a2d1c79ad8cfedecba3c2e5276571fbab642",
+      "base": "c192e89d809ae7279ed35ae834439bb7c0fbdc43",
+      "head": "495ebdf5d5ca5d9c09f79fdc3a6459e2db143d34",
+      "policy_sha256": "b5bfda1fd207ee72233a988e7759ad45fe043b24f47ba27f0f3a0d6138d2f2da",
+      "prompt_format": "numbered-source-v3",
+      "attempts": [
+        {
+          "task": "Purpose and scope: classify every changed file and explain necessary core dependencies.",
+          "client_request_id": "024014c1-7990-4be8-9b27-b5c0708becbd",
+          "request_bytes": 682564,
+          "timeout_seconds": 120,
+          "outcome": "response_received",
+          "started_at": "2026-10-19T15:14:47.664715+00:00",
+          "elapsed_seconds": 41.751,
+          "http_status": 200,
+          "server_request_id": "req_5c01b42afeea4517b9454486bdf7b76f"
+        },
+        {
+          "task": "Domain audit: follow control/data flow, challenge correctness and compatibility with supplied context.",
+          "client_request_id": "18029740-a7d1-409a-b50f-206c3afbe597",
+          "request_bytes": 685531,
+          "timeout_seconds": 120,
+          "outcome": "response_received",
+          "started_at": "2026-10-19T15:15:29.418858+00:00",
+          "elapsed_seconds": 36.909,
+          "http_status": 200,
+          "server_request_id": "req_752919a6a3814cac8d8f3977c7e1ea2d"
+        },
+        {
+          "task": "Evidence challenge: check prior claims and counterexamples; remove unsupported findings and state gaps.",
+          "client_request_id": "becdad72-e7d3-46da-bf24-ca526491285b",
+          "request_bytes": 685509,
+          "timeout_seconds": 120,
+          "outcome": "response_received",
+          "started_at": "2026-10-19T15:16:06.331528+00:00",
+          "elapsed_seconds": 30.982,
+          "http_status": 200,
+          "server_request_id": "req_c9f3197f83dc4a07b24676712059d532"
+        }
+      ],
+      "calls": [
+        {
+          "task": "Purpose and scope: classify every changed file and explain necessary core dependencies.",
+          "id": "resp_05fb000bd7a733f1016ad633e90efc87d2a483e72adc1b5863",
+          "model": "gpt-6-astra",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 185486,
+            "output_tokens": 1529,
+            "total_tokens": 187015,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 185456
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 904
+            }
+          },
+          "client_request_id": "024014c1-7990-4be8-9b27-b5c0708becbd",
+          "elapsed_seconds": 41.751
+        },
+        {
+          "task": "Domain audit: follow control/data flow, challenge correctness and compatibility with supplied context.",
+          "id": "resp_0918129caec381cf016ad63411a79487d29564ad7955a6af72",
+          "model": "gpt-6-astra",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 186060,
+            "output_tokens": 1483,
+            "total_tokens": 187543,
+            "input_tokens_details": {
+              "cached_tokens": 185456,
+              "cache_write_tokens": 0
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 862
+            }
+          },
+          "client_request_id": "18029740-a7d1-409a-b50f-206c3afbe597",
+          "elapsed_seconds": 36.909
+        },
+        {
+          "task": "Evidence challenge: check prior claims and counterexamples; remove unsupported findings and state gaps.",
+          "id": "resp_0a1eecc6b83ed537016ad63436a5b487d291611bc2748094c9",
+          "model": "gpt-6-astra",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 186060,
+            "output_tokens": 1482,
+            "total_tokens": 187542,
+            "input_tokens_details": {
+              "cached_tokens": 185456,
+              "cache_write_tokens": 0
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 828
+            }
+          },
+          "client_request_id": "becdad72-e7d3-46da-bf24-ca526491285b",
+          "elapsed_seconds": 30.982
+        }
+      ],
+      "review": {
+        "completion": "complete",
+        "files": [
+          {
+            "path": "src/middleware/ics_decoder.py",
+            "reason": "Directly implements the stated filtering simplification, a coherent narrow change. Reviewed both guards, enumeration, probe ownership, relevant unchanged callers, PM3 reservations and regression tests. No scope split is needed.",
+            "reviewed": true,
+            "scope": "purpose"
+          }
+        ],
+        "findings": [
+          {
+            "impact": "Unlike base, head allows internal PM3 aliases through both filtering boundaries. If opening succeeds, detect_decoder clears the input buffer, sends Who and reads from the internal PM3, potentially disrupting its owning client. The accessory detection lock does not coordinate with that client.",
+            "line": 180,
+            "path": "src/middleware/ics_decoder.py",
+            "quote": "            port == _PM3_PORT)",
+            "requested_change": "Restore canonical-path comparison of port and _PM3_PORT at both enumeration and the opening boundary. Retain and run tests/ui/test_ics_presence.py::test_internal_pm3_and_alias_never_opened, preserving its enumerated-alias, explicit-candidate and no-open assertions.",
+            "severity": "P1",
+            "side": "head",
+            "trigger": "On Linux, /dev/ttyUSB9 is a symlink resolving to /dev/ttyACM0 and is enumerated, or detect_decoder receives an explicit alias resolving there. Literal equality rejects neither alias. Enumeration deduplication does not protect the PM3: its literal path is skipped before its identity enters seen.",
+            "validation": "source_confirmed"
+          }
+        ],
+        "limitations": [
+          "Source review only: no tests were run, CI verified or hardware operated. Inspection predicts the existing alias regression test fails at tests/ui/test_ics_presence.py:55.",
+          "The prior finding survives the evidence challenge. Exact-path exclusion, enumeration deduplication and the accessory lock do not prevent the supplied alias counterexample. Actual disruption remains conditional on the serial open succeeding.",
+          "Relevant callers and reservation context were supplied; no concrete missing source dependency was identified for this change. The complete literal search does not establish absence of dynamic references.",
+          "Physical USB enumeration and serial-owner behavior remain unverified. This review has no access to an iCopy-X, genuine ICS Decoder or USB/serial tracing setup."
+        ],
+        "required_device_checks": [
+          "After correction, verify cold boot with a genuine decoder attached and hotplug/replug on an iCopy-X, including a PM3 alias candidate. Observe probe opens and traffic while the normal PM3 owner is active: accessory discovery must work without opening, flushing or sending Who to the internal PM3. Cover supported factory and matching Iceman installations without requiring firmware flashing or RF-card tests for this filtering change."
+        ],
+        "summary": "One introduced P1 regression is source-confirmed: literal port comparison removes alias-safe PM3 exclusion. Restore canonical-path filtering. Review of the supplied change is complete; this advisory result is not merge or release approval."
+      }
+    },
+    "assessment": {
+      "outcome": "expected_defect_found_with_complete_source_coverage",
+      "finding_assessment": "The P1 finding correctly distinguishes literal /dev/ttyACM0 exclusion from alias bypass, and explains why skipping the literal reserved path before recording seen identities does not protect an enumerated alias. Both enumerated and explicit candidates can reach the reset/Who sequence when opening succeeds. Restoring canonical comparison is the appropriate correction; no physical disruption is claimed.",
+      "scope_assessment": "Treats the filtering change as one coherent outcome and does not demand unrelated splits.",
+      "context_assessment": "The supplied foreground activity caller closes the earlier stated gap. All three responses validated and the final review identifies no concrete missing dependency for this change. This is a repeated regression case with changed context/rendering, not a new independent example.",
+      "diagnostics_assessment": "All three live attempts retain unique client IDs, allowlisted server request IDs, HTTP 200, request sizes, effective timeouts and elapsed durations. Returned response usage is linked to the same client IDs.",
+      "hardware_boundary": "Appropriately requests genuine accessory enumeration/ownership checks after correction and explicitly excludes unrelated RF-card acceptance. No hardware was operated by the reviewer."
+    }
+  },
+  {
+    "case": "optional-accessory-startup-context-followup",
+    "run": 39276572689,
+    "trusted_revision": "1979942702004bb63fab2d29a7a29e44d98e4a8b",
+    "url": "https://github.com/lab-401/icopy-x/actions/runs/39276572689",
+    "requests_with_unknown_usage": [
+      "4aa73f7f-8641-4495-a1d2-201d1dedcd01"
+    ],
+    "report": {
+      "status": "INCOMPLETE",
+      "advisory": true,
+      "model_requested": "gpt-6-astra",
+      "snapshot_sha256": "0666083c6ceed8f6f93e78f9943617bbe9ad955a9239efeb7d7350988a42b259",
+      "base": "5fa13555fbae77c4198de27c8b20935965b5dba3",
+      "head": "2a644f989c7ebbf9f8ecdf97f1b9992830aaefa5",
+      "policy_sha256": "b5bfda1fd207ee72233a988e7759ad45fe043b24f47ba27f0f3a0d6138d2f2da",
+      "prompt_format": "numbered-source-v3",
+      "attempts": [
+        {
+          "task": "Purpose and scope: classify every changed file and explain necessary core dependencies.",
+          "client_request_id": "4aa73f7f-8641-4495-a1d2-201d1dedcd01",
+          "request_bytes": 1116226,
+          "timeout_seconds": 120,
+          "outcome": "transport_error",
+          "started_at": "2026-10-19T15:17:03.178665+00:00",
+          "elapsed_seconds": 120.125
+        }
+      ],
+      "calls": [],
+      "review": null,
+      "error": "TimeoutError",
+      "failed_pass": "Purpose and scope: classify every changed file and explain necessary core dependencies.",
+      "failure_stage": "transport"
+    },
+    "assessment": {
+      "outcome": "transport_timeout_no_quality_verdict",
+      "finding_assessment": "No model response or review returned. Neither scope judgment nor code correctness can be assessed from this run.",
+      "diagnostics_assessment": "The first attempt is retained with a unique client correlation ID, a 1,116,226-byte serialized request, 120-second socket timeout, 120.125-second elapsed duration and transport_error outcome. No HTTP status or server request ID was received. Request delivery, server processing and billable usage remain unknown.",
+      "context_assessment": "The accessory-menu profile retained full relevant caller source and all changed files without collection gaps. Identical unchanged prompt sides were shared, but the prior full and reduced failures still stand. This new failure does not establish that request size, model computation or network conditions caused the timeout.",
+      "next_action": "No retry or increased limit. Investigate the single request via its correlation ID and consider a separately reviewed bounded asynchronous transport design before further startup trials. Ordinary contributor host/build/QEMU validation remains independent."
+    }
+  },
+  {
+    "case": "static-feature-submenu",
+    "run": 39278295702,
+    "trusted_revision": "492441f564df087fab69b4653b9a347412febb38",
+    "url": "https://github.com/lab-401/icopy-x/actions/runs/39278295702",
+    "requests_with_unknown_usage": [],
+    "report": {
+      "status": "ADVISORY_COMPLETE",
+      "advisory": true,
+      "model_requested": "gpt-6-astra",
+      "snapshot_sha256": "5ea06ccb576d42473576e0b31c3bf8b30978c0abc767982c1370ea2d2b635d64",
+      "base": "b6f9751d2fa0fef92a4a130fb15f9b8f63dd2672",
+      "head": "bf053947b16b1246f312877e1a314a092c759afd",
+      "policy_sha256": "d2d661801a56c0b56587d8322c96113f5841de8ee063927ba912e11769320ffa",
+      "prompt_format": "numbered-source-v3",
+      "attempts": [
+        {
+          "task": "Purpose and scope: classify every changed file and explain necessary core dependencies.",
+          "client_request_id": "2955a7ec-c720-4f59-8083-89d711a810ff",
+          "request_bytes": 1376258,
+          "timeout_seconds": 120,
+          "outcome": "response_received",
+          "started_at": "2026-10-19T15:39:49.222857+00:00",
+          "elapsed_seconds": 52.819,
+          "http_status": 200,
+          "server_request_id": "req_3044c2ebd149466d9af7d2a9f3b14609"
+        },
+        {
+          "task": "Domain audit: follow control/data flow, challenge correctness and compatibility with supplied context.",
+          "client_request_id": "daf486b7-360b-4db5-ab6b-f9827c98156c",
+          "request_bytes": 1378788,
+          "timeout_seconds": 120,
+          "outcome": "response_received",
+          "started_at": "2026-10-19T15:40:42.048544+00:00",
+          "elapsed_seconds": 28.995,
+          "http_status": 200,
+          "server_request_id": "req_8382fe0dcb6145beb4dcb998943bc6ce"
+        },
+        {
+          "task": "Evidence challenge: check prior claims and counterexamples; remove unsupported findings and state gaps.",
+          "client_request_id": "b213f770-436e-4756-a229-6dd7788bc3c8",
+          "request_bytes": 1379018,
+          "timeout_seconds": 120,
+          "outcome": "response_received",
+          "started_at": "2026-10-19T15:41:11.051142+00:00",
+          "elapsed_seconds": 43.356,
+          "http_status": 200,
+          "server_request_id": "req_91a5b7a69ff64f5ab828308eb58ced8c"
+        }
+      ],
+      "calls": [
+        {
+          "task": "Purpose and scope: classify every changed file and explain necessary core dependencies.",
+          "id": "resp_0948897691109e0f016ad639c6008087d088d7703038338059",
+          "model": "gpt-6-astra",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 371325,
+            "output_tokens": 1601,
+            "total_tokens": 372926,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 371295
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 1034
+            }
+          },
+          "client_request_id": "2955a7ec-c720-4f59-8083-89d711a810ff",
+          "elapsed_seconds": 52.819
+        },
+        {
+          "task": "Domain audit: follow control/data flow, challenge correctness and compatibility with supplied context.",
+          "id": "resp_0a200501df3e43d6016ad639fa4ab087d0998d76111d5f7bb2",
+          "model": "gpt-6-astra",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 371837,
+            "output_tokens": 1109,
+            "total_tokens": 372946,
+            "input_tokens_details": {
+              "cached_tokens": 371295,
+              "cache_write_tokens": 0
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 516
+            }
+          },
+          "client_request_id": "daf486b7-360b-4db5-ab6b-f9827c98156c",
+          "elapsed_seconds": 28.995
+        },
+        {
+          "task": "Evidence challenge: check prior claims and counterexamples; remove unsupported findings and state gaps.",
+          "id": "resp_071a06722c40a243016ad63a174cc887d0a39227817454b79f",
+          "model": "gpt-6-astra",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 371864,
+            "output_tokens": 1620,
+            "total_tokens": 373484,
+            "input_tokens_details": {
+              "cached_tokens": 371295,
+              "cache_write_tokens": 0
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 1002
+            }
+          },
+          "client_request_id": "b213f770-436e-4756-a229-6dd7788bc3c8",
+          "elapsed_seconds": 43.356
+        }
+      ],
+      "review": {
+        "completion": "complete",
+        "files": [
+          {
+            "path": "src/lib/activity_main.py",
+            "reason": "Reviewed the added Integration Info content, menu entry, state, activation, scrolling and back navigation against the supplied caller and widget implementations. No USB, PM3 or firmware behavior changes are introduced.",
+            "reviewed": true,
+            "scope": "purpose"
+          },
+          {
+            "path": "tests/ui/activities/test_ics_decoder.py",
+            "reason": "Reviewed the updated landing-menu assertions and four-row highlight/wrap checks. They support the same UI addition but now require the unjustified submenu. Existing protocol and safety tests are unchanged.",
+            "reviewed": true,
+            "scope": "supporting"
+          }
+        ],
+        "findings": [
+          {
+            "impact": "The new destination displays only 'iCS Decoder v1.1' and a generic feature description. Neither the implementation nor the supplied purpose establishes what this separate version identifies or a concrete support, diagnostic or user task served by the screen. It adds a non-task destination to the accessory menu and pushes Back down one row. There are no newly added contributor names or promotional links; the concern is the unsupported purpose of the submenu, not its label or version text alone.",
+            "line": 10060,
+            "path": "src/lib/activity_main.py",
+            "quote": "        self._show_info(self.STATE_INFO, 'Integration Info', [",
+            "requested_change": "Remove the Integration Info menu entry, _show_integration_info, STATE_INFO, FEATURE_VERSION and their activation/back/key-handling branches from src/lib/activity_main.py. Restore the three-row menu expectations and wrap checks in tests/ui/activities/test_ics_decoder.py. Establish a concrete user or diagnostic purpose before proposing a replacement screen; a static feature label/version alone is insufficient. Preserve credential details, useful device/version/support information and required legal notices.",
+            "severity": "P2",
+            "side": "head",
+            "trigger": "Open ICS Decoder, select Integration Info, and press OK or M2.",
+            "validation": "source_confirmed"
+          }
+        ],
+        "limitations": [
+          "Static source review only; no tests, CI, QEMU flows or physical hardware were run or verified.",
+          "Coverage is limited to this menu-only delta and its relevant supplied context. Existing accessory transport, RF, flashing and worker-lifecycle behavior are not newly validated by this review."
+        ],
+        "required_device_checks": [],
+        "summary": "The prior P2 finding remains supported after checking the actual content and navigation, without alleging contributor branding or an introduced runtime failure. Both changed paths form one focused UI addition; no split is needed. Root-menu order and its empty M1 action remain unchanged. No RF, USB-enumeration or flashing checks are warranted for this delta. This completed source review is advisory, not merge approval."
+      }
+    },
+    "assessment": {
+      "outcome": "expected_policy_boundary_and_complete_remediation_found",
+      "finding_assessment": "The P2 correctly identifies an unsupported static feature-version destination. It explicitly acknowledges that contributor names and promotional links are absent, and does not invent contributor intent or a runtime failure. Full removal covers menu, helper, state, version constant, routes and the tests requiring the fourth row.",
+      "counterexample_assessment": "The report requires a concrete task or diagnostic purpose before proposing a replacement. It preserves Credential Details, useful device/version/support information and legal notices, rather than banning About or version labels.",
+      "scope_and_hardware_assessment": "Both changed files form one coherent UI addition; no split or unrelated RF, flashing or USB acceptance is demanded. The model does not claim tests ran.",
+      "execution_note": "GitHub run/job GET responses continued to report waiting after the final artifact was available. A cancellation request was refused because the run was completed. This assessment uses the validated final artifact; no duplicate request or successful cancellation occurred.",
+      "evaluation_limit": "Synthetic variant authored after the policy clarification, not an independently human-labeled holdout or a general accuracy estimate."
+    }
+  },
+  {
+    "case": "device-diagnostics-fallback",
+    "run": 39281585898,
+    "trusted_revision": "492441f564df087fab69b4653b9a347412febb38",
+    "url": "https://github.com/lab-401/icopy-x/actions/runs/39281585898",
+    "requests_with_unknown_usage": [],
+    "report": {
+      "status": "ADVISORY_COMPLETE",
+      "advisory": true,
+      "model_requested": "gpt-6-astra",
+      "snapshot_sha256": "8a4e674817e2ce46d47ffe02b3f0dfa49bb6d294e9f5d34b495f140fa759e026",
+      "base": "b6f9751d2fa0fef92a4a130fb15f9b8f63dd2672",
+      "head": "2eece3f8e81002497bfcb8ac830f11f5c51654a8",
+      "policy_sha256": "d2d661801a56c0b56587d8322c96113f5841de8ee063927ba912e11769320ffa",
+      "prompt_format": "numbered-source-v3",
+      "attempts": [
+        {
+          "task": "Purpose and scope: classify every changed file and explain necessary core dependencies.",
+          "client_request_id": "17e62d87-380b-4986-bd2c-5da4f73758d7",
+          "request_bytes": 1376080,
+          "timeout_seconds": 120,
+          "outcome": "response_received",
+          "started_at": "2026-10-19T16:20:17.306622+00:00",
+          "elapsed_seconds": 38.058,
+          "http_status": 200,
+          "server_request_id": "req_a569b1e87ef04f7486f51ee6e6db5e05"
+        },
+        {
+          "task": "Domain audit: follow control/data flow, challenge correctness and compatibility with supplied context.",
+          "client_request_id": "1334a61f-11a8-4ad3-843d-2d0fb1cb1b38",
+          "request_bytes": 1378575,
+          "timeout_seconds": 120,
+          "outcome": "response_received",
+          "started_at": "2026-10-19T16:20:55.369283+00:00",
+          "elapsed_seconds": 21.244,
+          "http_status": 200,
+          "server_request_id": "req_46802a64a3eb4258bfba1fd4cd768ff5"
+        },
+        {
+          "task": "Evidence challenge: check prior claims and counterexamples; remove unsupported findings and state gaps.",
+          "client_request_id": "0674dae8-4405-48aa-b128-79d1498d527e",
+          "request_bytes": 1378578,
+          "timeout_seconds": 120,
+          "outcome": "response_received",
+          "started_at": "2026-10-19T16:21:16.617537+00:00",
+          "elapsed_seconds": 22.792,
+          "http_status": 200,
+          "server_request_id": "req_7a4fecd8a2984420baaa81dedc229121"
+        }
+      ],
+      "calls": [
+        {
+          "task": "Purpose and scope: classify every changed file and explain necessary core dependencies.",
+          "id": "resp_0b587d12c608cced016ad643423dc487d1a98b7cded1b8ec4c",
+          "model": "gpt-6-astra",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 372001,
+            "output_tokens": 1475,
+            "total_tokens": 373476,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 371971
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 913
+            }
+          },
+          "client_request_id": "17e62d87-380b-4986-bd2c-5da4f73758d7",
+          "elapsed_seconds": 38.058
+        },
+        {
+          "task": "Domain audit: follow control/data flow, challenge correctness and compatibility with supplied context.",
+          "id": "resp_011b091f3c9d666f016ad64367af7887d19f07b8361d290eea",
+          "model": "gpt-6-astra",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 372512,
+            "output_tokens": 914,
+            "total_tokens": 373426,
+            "input_tokens_details": {
+              "cached_tokens": 371971,
+              "cache_write_tokens": 0
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 354
+            }
+          },
+          "client_request_id": "1334a61f-11a8-4ad3-843d-2d0fb1cb1b38",
+          "elapsed_seconds": 21.244
+        },
+        {
+          "task": "Evidence challenge: check prior claims and counterexamples; remove unsupported findings and state gaps.",
+          "id": "resp_0650f3b07416c0af016ad6437ce6c887d1a6fadded9d5e538f",
+          "model": "gpt-6-astra",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 372511,
+            "output_tokens": 1095,
+            "total_tokens": 373606,
+            "input_tokens_details": {
+              "cached_tokens": 371971,
+              "cache_write_tokens": 0
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 516
+            }
+          },
+          "client_request_id": "0674dae8-4405-48aa-b128-79d1498d527e",
+          "elapsed_seconds": 22.792
+        }
+      ],
+      "review": {
+        "completion": "complete",
+        "files": [
+          {
+            "path": "src/lib/activity_main.py",
+            "reason": "Changes the About-page PM3 fallback label. Reviewed the loading/rendering flow and supplied version provider against the stated diagnostic outcome.",
+            "reviewed": true,
+            "scope": "purpose"
+          },
+          {
+            "path": "tests/ui/activities/test_about.py",
+            "reason": "Adds missing-getPM coverage and checks preservation of other diagnostic values. Supports the same outcome; no existing tests are removed or weakened.",
+            "reviewed": true,
+            "scope": "supporting"
+          }
+        ],
+        "findings": [
+          {
+            "impact": "Normal PM3 lookup failures still display '?' rather than 'n/a'. The supplied version.getPM() returns '?' when get_running_version() returns None (src/middleware/version.py:179\u2013181), and also returns '?' after caught errors or unusable version data (204\u2013208). About stores that return value directly and renders it at activity_main.py:992, bypassing this exception handler. This is an unaddressed case of the stated fix, not a newly introduced communication failure.",
+            "line": 949,
+            "path": "src/lib/activity_main.py",
+            "quote": "            info['pm'] = 'n/a'",
+            "requested_change": "Normalize the provider's '?' unavailable sentinel to 'n/a' at the About-page boundary while preserving valid version strings. Keep the missing-API test and add coverage using the real version.getPM(), with its cache cleared and get_running_version() returning None or unusable version fields. Assert the rendered PM fallback and preservation of the other diagnostics.",
+            "severity": "P2",
+            "side": "head",
+            "trigger": "Open About with no cached PM3 version when the PM3 query fails or yields no usable version; version.getPM() returns '?' without raising.",
+            "validation": "source_confirmed"
+          }
+        ],
+        "limitations": [
+          "Static source review only; no tests, CI checks, QEMU sessions, or hardware operations were run.",
+          "The added test checks dictionary population for a missing API, not normal provider failure paths or rendered output. Existing asynchronous UI behavior is unchanged and is not reported as an introduced defect."
+        ],
+        "required_device_checks": [],
+        "summary": "The prior finding remains supported after checking the real provider: its ordinary unavailable sentinel bypasses the changed fallback. Both changed paths serve one coherent diagnostic UI outcome; no split is needed. Supplied source coverage is complete for this change. No physical RF, accessory, or flashing checks are needed for the label change. This review is advisory, not merge approval."
+      }
+    },
+    "assessment": {
+      "outcome": "useful_diagnostics_preserved_and_incomplete_fix_identified",
+      "policy_assessment": "The reviewer accepts the useful device-version diagnostic purpose and coherent two-file scope. It does not apply the contributor-submenu prohibition to About or ask to remove diagnostics.",
+      "finding_assessment": "Independent immutable-source inspection confirms that version.getPM returns ? for absent/unusable PM3 version data and caught failures. About stores and renders that returned value directly. The synthetic patch changes only its exception handler to n/a, so ordinary provider failure still misses the broad stated purpose. Normalizing the sentinel at the UI boundary is a supported completion request. This is not a newly introduced PM3 communication regression.",
+      "test_assessment": "The new test removes getPM entirely and therefore covers only missing-API fallback; it does not exercise the real provider sentinel or rendering. The recommendation to cover those paths is justified. No candidate tests or hardware were executed in this assessment.",
+      "evaluation_limit": "This was a useful-diagnostics control candidate, not a guarantee of no findings. Do not count it as a finding-free clean control or discard the supported finding to match an initial label. The synthetic change is not merged and does not require changing current main to use n/a.",
+      "hardware_boundary": "Correctly requests no physical RF, accessory or flashing checks for this diagnostic-label delta."
+    }
+  }
+]

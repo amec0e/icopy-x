@@ -92,3 +92,43 @@ policy, source collection, context selection or model configuration changes;
 record failures and usage as well as successful findings. Ordinary application
 contributors do not need to author model-evaluation cases or QEMU internals.
 Host/build/QEMU checks remain deterministic evidence with their existing owners.
+
+## Context and policy follow-up, 19 October 2026
+
+[PR #97](https://github.com/lab-401/icopy-x/pull/97) records/checkpoints attempts,
+including failures without response metadata. [#98](https://github.com/lab-401/icopy-x/pull/98)
+adds opt-in trusted context profiles and shares identical unchanged source in
+the prompt while retaining both originals in the snapshot. [#99](https://github.com/lab-401/icopy-x/pull/99)
+clarifies removal of contributor-only submenus and dead navigation/state.
+All passed host, reviewer, build and both-IPK QEMU checks before merge; the
+reviewer now has 48 offline tests, including detection of stale profile paths.
+
+The follow-up [cases](20261019-followup/cases.json) and
+[results](20261019-followup/results.json) preserve a separately bounded series:
+five comparisons, at most fifteen generation requests, no automatic retries and
+unchanged time/token/byte limits. Expectations were recorded before dispatch;
+expected findings and assessments were not model input. The two context trials
+use trusted main `1979942702004bb63fab2d29a7a29e44d98e4a8b` with the original
+policy. Three policy trials use `492441f564df087fab69b4653b9a347412febb38` with
+the clarified policy. Exact selection, policy and snapshot identities are saved.
+
+Three comparisons repeat earlier cases with new context/rendering. Two fresh
+synthetic variants under `eval/astra-followup-20261019/*` add a static
+Integration Info submenu without contributor handles, or change a useful
+device-version fallback to `n/a` with a regression test. These are never merge
+or deployment candidates. Their ASTs and diffs were inspected locally; the
+reviewer executes no candidate code. The variants were constructed after policy
+clarification and are not independently labeled human holdouts or a statistical
+accuracy sample. They test specific counterexamples to overbroad/partial advice.
+
+Use the recorded trusted tool revision to reproduce a named profile: profile
+definitions and prompt rendering can change later. Preserve the prior series
+and its failures. A later result cannot establish why an earlier request failed.
+
+Four comparisons produced complete source advisories; the startup comparison
+timed out without a response. Thirteen generations were attempted, twelve returned
+validated responses, and one has unknown usage. The diagnostic control preserved
+useful About information but exposed a real gap in the synthetic fallback fix:
+normal provider failures return `?` without entering the changed exception path.
+Its assessment records that supported finding instead of treating an expected
+clean label as ground truth. None of the synthetic changes is merged.

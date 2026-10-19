@@ -104,7 +104,7 @@ patched pins, and Dependabot checks test/station requirements and Actions weekly
 Legacy dependency alerts remain open; see [TEST_DEPENDENCIES.md](TEST_DEPENDENCIES.md).
 These changes are separate from a device-runtime migration.
 The [Astra advisory pilot](../tools/auto_review/README.md) from #88 is available as
-a manual workflow on trusted main. Updates through #93 have 37 offline
+a manual workflow on trusted main. Updates through #99 have 48 offline
 contracts passing on Linux and Windows, with host/build/QEMU checks passed before
 merge. [Hosted preparation 39248718899](https://github.com/lab-401/icopy-x/actions/runs/39248718899)
 completed without an API key and produced the same immutable snapshot digest as
@@ -126,9 +126,22 @@ Four final reviews retained specific context gaps. Credits remediation was too
 permissive about retaining a static feature-version submenu. Both attempts at
 the larger accessory-startup comparison timed out before returning a review,
 leaving that scope judgment unassessed and their API usage unknown.
-Context selection, that policy boundary and transport reliability require work
-before automatic invocation/publication. Complete source coverage is not a test
-pass, device acceptance or merge approval. See
+Follow-up changes #97-99 preserve failed-attempt diagnostics, add bounded caller
+profiles, avoid duplicating identical unchanged source in prompts, and clarify
+complete removal of contributor-only submenus. All passed host/reviewer/build
+and both-IPK QEMU checks before merge. The repeated alias comparison now reaches
+complete advisory source coverage; the credits comparison now recommends full
+submenu/state/navigation removal while preserving useful device diagnostics.
+The static-version submenu counterexample received the same complete-removal
+guidance without inventing contributor branding. The useful-diagnostics control
+preserved About and identified a supported gap in its synthetic fallback change;
+it is not a finding-free clean-control pass. Four follow-up comparisons returned
+twelve validated responses and complete source advisories.
+The accessory-startup comparison timed out a third time without response
+headers, review or usage, after 120.125 seconds. The cause remains unknown.
+These results do not establish general review accuracy or resolve the transport
+reliability issue. Complete source coverage is not a test pass, device acceptance
+or merge approval. See
 [the evaluation record](../tools/auto_review/EVALUATION.md) for exact revisions,
 findings and usage. The API key is in the main-only
 `astra-review` environment. Automatic invocation/publication and a model gate
