@@ -9,6 +9,13 @@ from .reviewer import review
 from .snapshots import canonical, collect, digest
 
 
+def save_report(output, report):
+    """Replace our own report atomically so interruption leaves a readable checkpoint."""
+    temporary = output / 'report.json.tmp'
+    temporary.write_text(json.dumps(report, indent=2), encoding='utf-8')
+    temporary.replace(output / 'report.json')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=('prepare', 'review'))
@@ -45,12 +52,13 @@ def main(argv=None):
         else:
             policy = Path(__file__).with_name('policy.md').read_text(encoding='utf-8')
             report = review(bundle, policy, os.environ.get('OPENAI_API_KEY'),
-                            max_output_tokens=args.max_output_tokens, timeout=args.timeout)
+                            max_output_tokens=args.max_output_tokens, timeout=args.timeout,
+                            checkpoint=lambda value: save_report(args.output, value))
             code = 0 if report['status'] == 'ADVISORY_COMPLETE' else 2
     except (ValueError, OSError, TimeoutError) as error:
         # Never persist API bodies, credentials or arbitrary exception reprs.
         report['error'] = type(error).__name__
-    (args.output / 'report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
+    save_report(args.output, report)
     print(json.dumps(dict(status=report['status'], report=str(args.output / 'report.json'))))
     return code
 
