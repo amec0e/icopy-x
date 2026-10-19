@@ -3,6 +3,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from urllib.error import HTTPError
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from tools.auto_review import cli, contract, hosted, reviewer, snapshots
@@ -303,6 +305,100 @@ class PilotTests(unittest.TestCase):
         self.assertEqual(report['calls'], [])
         self.assertEqual(report['failure_stage'], 'transport')
         self.assertNotIn('secret-in-arbitrary-error', json.dumps(report))
+
+    def test_timeout_records_attempt_and_unknown_usage_without_retry(self):
+        bundle = self.bundle()
+        with patch.object(reviewer.time, 'monotonic', side_effect=[0, 1, 2, 9]), \
+                patch.object(reviewer, 'send', side_effect=TimeoutError('private response')) as send:
+            report = reviewer.review(bundle, 'policy', 'fixture-key')
+        self.assertEqual(send.call_count, 1)
+        self.assertEqual(report['calls'], [])
+        self.assertEqual(report['error'], 'TimeoutError')
+        self.assertEqual(report['failure_stage'], 'transport')
+        attempt, = report['attempts']
+        self.assertEqual(attempt['elapsed_seconds'], 7)
+        self.assertEqual(attempt['timeout_seconds'], 120)
+        self.assertEqual(attempt['outcome'], 'transport_error')
+        self.assertGreater(attempt['request_bytes'], 0)
+        self.assertNotIn('usage', attempt)
+        self.assertNotIn('fixture-key', json.dumps(report))
+        self.assertNotIn('private response', json.dumps(report))
+        self.assertEqual(send.call_args.kwargs['attempt'], attempt)
+
+    def test_second_timeout_preserves_validated_review_and_returned_usage(self):
+        with patch.object(reviewer, 'send', side_effect=[self.response(), TimeoutError()]):
+            report = reviewer.review(self.bundle(), 'policy', 'fixture-key')
+        self.assertEqual(report['status'], 'INCOMPLETE')
+        self.assertEqual(report['review'], self.valid())
+        self.assertEqual(len(report['calls']), 1)
+        first, second = report['attempts']
+        self.assertNotEqual(first['client_request_id'], second['client_request_id'])
+        self.assertEqual(first['outcome'], 'response_received')
+        self.assertEqual(second['outcome'], 'transport_error')
+        self.assertEqual(report['calls'][0]['client_request_id'], first['client_request_id'])
+        self.assertEqual(report['calls'][0]['usage']['input_tokens'], 10)
+
+    def test_request_budget_prevents_attempt_and_checkpoint_failure_prevents_send(self):
+        bundle = self.bundle()
+        bundle['limits']['max_bytes'] = 1
+        with patch.object(reviewer, 'send') as send:
+            report = reviewer.review(bundle, 'policy', 'fixture-key')
+        send.assert_not_called()
+        self.assertEqual(report['attempts'], [])
+        with patch.object(reviewer, 'send') as send:
+            report = reviewer.review(self.bundle(), 'policy', 'fixture-key',
+                checkpoint=MagicMock(side_effect=OSError('private disk error')))
+        send.assert_not_called()
+        self.assertEqual(report['failure_stage'], 'checkpoint')
+        self.assertEqual(report['attempts'][0]['outcome'], 'not_sent')
+        self.assertNotIn('private disk error', json.dumps(report))
+
+    def test_cli_interruption_leaves_atomic_incomplete_attempt_checkpoint(self):
+        output = self.root / 'interrupted'
+        def interrupt(*args, **kwargs):
+            saved = json.loads((output / 'report.json').read_text())
+            self.assertEqual(saved['status'], 'INCOMPLETE')
+            self.assertEqual(saved['attempts'][0]['outcome'], 'in_flight')
+            self.assertIsNone(saved['attempts'][0]['elapsed_seconds'])
+            self.assertEqual(saved['calls'], [])
+            self.assertNotIn('fixture-key', json.dumps(saved))
+            self.assertFalse((output / 'report.json.tmp').exists())
+            raise KeyboardInterrupt()
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'fixture-key'}), \
+                patch.object(reviewer, 'send', side_effect=interrupt), self.assertRaises(KeyboardInterrupt):
+            cli.main(['review', '--repo', str(self.repo), '--base', self.base, '--head', self.head,
+                      '--purpose', 'Fixture', '--output', str(output)])
+        self.assertEqual(json.loads((output / 'report.json').read_text())['status'], 'INCOMPLETE')
+
+    def test_transport_header_correlation_and_http_failure_are_allowlisted(self):
+        attempt = {'client_request_id': 'f9ddfca2-c8c7-4d32-91af-51d43d425e35'}
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.status = 200
+        response.headers = {'x-request-id': 'req_safe', 'private-header': 'never-store'}
+        response.read.return_value = json.dumps(self.response()).encode()
+        opener = MagicMock()
+        opener.open.return_value = response
+        with patch.object(reviewer, 'build_opener', return_value=opener):
+            reviewer.send({'input': []}, 'fixture-key', 37, attempt=attempt)
+        outgoing = opener.open.call_args.args[0]
+        self.assertEqual(outgoing.get_header('X-client-request-id'), attempt['client_request_id'])
+        self.assertEqual(opener.open.call_args.kwargs, {'timeout': 37})
+        self.assertEqual(attempt['server_request_id'], 'req_safe')
+        self.assertEqual(attempt['http_status'], 200)
+        self.assertNotIn('never-store', json.dumps(attempt))
+        for unsafe in ('line\nbreak', 'x' * 161, 'non-ascii-\u00e9', 'key: bearer secret'):
+            with self.subTest(unsafe=unsafe):
+                record = {}
+                reviewer.transport_metadata(record, {'x-request-id': unsafe}, 200)
+                self.assertNotIn('server_request_id', record)
+        opener.open.side_effect = HTTPError('https://api.openai.com/v1/responses', 429,
+            'private error body', {'x-request-id': 'req_failure'}, None)
+        with patch.object(reviewer, 'build_opener', return_value=opener), self.assertRaises(reviewer.APIError):
+            reviewer.send({}, 'fixture-key', 37, attempt=attempt)
+        self.assertEqual(attempt['server_request_id'], 'req_failure')
+        self.assertEqual(attempt['http_status'], 429)
+        self.assertNotIn('private', json.dumps(attempt))
 
     def test_live_validation_failures_have_safe_specific_diagnostics(self):
         bad_citation = self.valid()

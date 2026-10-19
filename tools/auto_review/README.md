@@ -71,6 +71,23 @@ file coverage, fabricated source quotes, model substitution and truncation fail
 closed. Successful call accounting survives a later failed pass; a network failure
 may still incur API usage that the client cannot record.
 
+`attempts` records each planned request before sending: pass, UTC start time,
+effective socket timeout, serialized request bytes and a unique client request ID.
+The ID is sent as `X-Client-Request-Id`; an allowlisted `x-request-id` response
+header and HTTP status are retained when available. These are correlation IDs,
+not retry or deduplication guarantees. `calls` separately records returned response
+metadata and token usage, linked by client ID. An empty `calls` list does not mean
+no request or no charge. A failed transport records elapsed time without inventing
+usage or persisting raw exceptions, headers, response bodies or credentials.
+
+The CLI atomically checkpoints `report.json` before sending and after receiving
+a response. A killed job can leave an `INCOMPLETE` report with an `in_flight`
+attempt: delivery, elapsed time and usage are then unknown, not zero. A checkpoint
+failure before send records `not_sent` and prevents the call. Earlier validated
+proposals survive later failures. The socket timeout is not an end-to-end response
+deadline; the workflow wall-clock limit remains the final bound. No automatic
+retry is added. See [OpenAI request debugging](https://developers.openai.com/api/reference/overview#debugging-requests).
+
 The prompt supplies source lines as `numbered_text`: a 1-based line number, a tab,
 then the original line. Quotes must exclude that prefix. `snapshot.json` retains
 the original blobs and hashes; citation validation still checks those original
