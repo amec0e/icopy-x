@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 import actstack
+from _constants import KEY_UP, KEY_DOWN
 from actmain import MainActivity
 from tests.ui.conftest import MockCanvas
 
@@ -23,6 +24,10 @@ def actions(menu):
 
 def deliver(menu, workers, present):
     menu._decoder_presence = SimpleNamespace(check=lambda cancelled: present)
+    # A previous poll can still be waiting in the deferred scheduler, including
+    # a cancelled worker from before onPause. Finish it before the new check.
+    if menu._decoder_worker is not None and menu._decoder_worker.is_alive():
+        menu._decoder_worker.run()
     menu.getCanvas().advance(1000)
     workers[-1].run()
     menu.getCanvas().advance(1000)
@@ -47,6 +52,39 @@ def test_disconnecting_selected_decoder_leaves_valid_selection(menu, activity_wo
     menu.lv_main_page.setSelection(actions(menu).index('iclass_se'))
     deliver(menu, activity_workers, False)
     assert actions(menu)[menu.lv_main_page.selection()] == 'settings_menu'
+
+
+def test_return_to_connected_decoder_restores_focus_after_revalidation(menu, activity_workers):
+    deliver(menu, activity_workers, True)
+    menu.lv_main_page.setSelection(actions(menu).index('iclass_se'))
+    menu.onPause()
+    menu.onResume()
+    assert 'iclass_se' not in actions(menu)  # stale presence is never displayed
+    deliver(menu, activity_workers, True)
+    assert actions(menu)[menu.lv_main_page.selection()] == 'iclass_se'
+
+
+def test_unplug_while_away_discards_restore_intent(menu, activity_workers):
+    deliver(menu, activity_workers, True)
+    menu.lv_main_page.setSelection(actions(menu).index('iclass_se'))
+    menu.onPause()
+    menu.onResume()
+    deliver(menu, activity_workers, False)
+    assert 'iclass_se' not in actions(menu)
+    deliver(menu, activity_workers, True)
+    assert actions(menu)[menu.lv_main_page.selection()] == 'settings_menu'
+
+
+@pytest.mark.parametrize('key', [KEY_UP, KEY_DOWN])
+def test_navigation_while_revalidating_takes_priority(menu, activity_workers, key):
+    deliver(menu, activity_workers, True)
+    menu.lv_main_page.setSelection(actions(menu).index('iclass_se'))
+    menu.onPause()
+    menu.onResume()
+    menu.onKeyEvent(key)
+    chosen = actions(menu)[menu.lv_main_page.selection()]
+    deliver(menu, activity_workers, True)
+    assert actions(menu)[menu.lv_main_page.selection()] == chosen
 
 
 @pytest.mark.parametrize('finish', ['onPause', 'onDestroy'])

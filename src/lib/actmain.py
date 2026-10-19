@@ -178,6 +178,7 @@ class MainActivity(BaseActivity):
         self._decoder_cancel = threading.Event()
         self._decoder_results = queue.Queue()
         self._decoder_timer = None
+        self._decoder_restore_focus = False
 
     def onCreate(self, bundle=None):
         """Set up the main menu.
@@ -235,6 +236,8 @@ class MainActivity(BaseActivity):
 
         # Schedule from Tk only. Workers put results in a queue; they never
         # touch a paused/destroyed activity's canvas or call Tk.after().
+        self._decoder_restore_focus = bool(self.lv_main_page is not None and
+            self._menu_items[self.lv_main_page.selection()][2] == 'iclass_se')
         self._set_decoder_visible(False)
         if self._decoder_timer is None and self.getCanvas() is not None:
             self._decoder_timer = self.getCanvas().after(250, self._poll_decoder)
@@ -260,7 +263,10 @@ class MainActivity(BaseActivity):
         while not self._decoder_results.empty():
             token, present = self._decoder_results.get_nowait()
             if token is self._decoder_cancel and not token.is_set():
-                self._set_decoder_visible(present)
+                self._set_decoder_visible(present, restore_focus=self._decoder_restore_focus)
+                # A negative result ends this return attempt. A later hotplug
+                # must not move the highlight back to a disconnected device.
+                self._decoder_restore_focus = False
         if self._decoder_worker is None or not self._decoder_worker.is_alive():
             self._decoder_cancel = threading.Event()
             token = self._decoder_cancel
@@ -280,13 +286,14 @@ class MainActivity(BaseActivity):
             self._decoder_worker.start()
         self._decoder_timer = self.getCanvas().after(1000, self._poll_decoder)
 
-    def _set_decoder_visible(self, present):
+    def _set_decoder_visible(self, present, restore_focus=False):
         items = [item for item in self._menu_catalog
                  if item[2] != 'iclass_se' or present]
         if items == self._menu_items:
             return
         selected = self.lv_main_page.selection() if self.lv_main_page else 0
-        action = self._menu_items[selected][2]
+        action = ('iclass_se' if present and restore_focus
+                  else self._menu_items[selected][2])
         self._menu_items = items
         if self.lv_main_page is not None:
             self.lv_main_page.setItems([self._menu_label(item) for item in items])
@@ -300,6 +307,9 @@ class MainActivity(BaseActivity):
         """Handle key input on the main menu."""
         if self.isbusy():
             return
+
+        if key in (KEY_UP, KEY_DOWN, KEY_OK, KEY_M2, KEY_ALL):
+            self._decoder_restore_focus = False
 
         if key == KEY_UP:
             if self.lv_main_page is not None:
