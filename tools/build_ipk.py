@@ -344,44 +344,17 @@ def collect_build_binaries(serial_number, include_flash=True):
       Both are shipped as pm3/lua.zip inside the IPK — the installer
       extracts whatever is bundled.
     """
-    pairs = []
-
-    # proxmark3 binary -> pm3/proxmark3
-    # Flash IPK: iceman client (build/proxmark3 from Docker)
-    # No-flash IPK: factory client (build/factory_proxmark3, checked into repo)
-    if include_flash:
-        pm3_build = os.path.join(BUILD_DIR, "proxmark3")
-        if os.path.exists(pm3_build):
-            pairs.append((pm3_build, "pm3/proxmark3"))
-            print(f"  PM3 client: {pm3_build} (iceman)")
-        else:
-            print("WARNING: build/proxmark3 not found — run Docker build first")
-    else:
-        pm3_factory = os.path.join(BUILD_DIR, "factory_proxmark3")
-        if os.path.exists(pm3_factory):
-            pairs.append((pm3_factory, "pm3/proxmark3"))
-            print(f"  PM3 client: {pm3_factory} (factory)")
-        else:
-            print("WARNING: build/factory_proxmark3 not found")
-
-    # lua.zip -> pm3/lua.zip (PM3 LUA scripts)
-    # Flash IPK: iceman lua (build/lua.zip from Docker, Lua 5.4 compatible)
-    # No-flash IPK: factory lua (build/factory_lua.zip, Lua 5.1)
-    if include_flash:
-        lua_build = os.path.join(BUILD_DIR, "lua.zip")
-        if os.path.exists(lua_build):
-            pairs.append((lua_build, "pm3/lua.zip"))
-            print(f"  LUA scripts: {lua_build} (iceman, Lua 5.4)")
-        else:
-            print("WARNING: build/lua.zip not found — run Docker build first")
-    else:
-        lua_factory = os.path.join(BUILD_DIR, "factory_lua.zip")
-        if os.path.exists(lua_factory):
-            pairs.append((lua_factory, "pm3/lua.zip"))
-            print(f"  LUA scripts: {lua_factory} (factory, Lua 5.1)")
-        else:
-            print("WARNING: build/factory_lua.zip not found — no-flash IPK will have no LUA scripts")
-
+    # Require the selected pair; never silently omit an input or borrow one
+    # from the other client/Lua family. Content/provenance checks remain in CI.
+    prefix = "" if include_flash else "factory_"
+    family = "iceman, Lua 5.4" if include_flash else "factory, Lua 5.1"
+    pairs = [(os.path.join(BUILD_DIR, prefix + name), "pm3/" + name)
+             for name in ("proxmark3", "lua.zip")]
+    for source, _ in pairs:
+        if not os.path.isfile(source) or os.path.getsize(source) == 0:
+            raise ValueError(f"Required {family} input is missing, empty or not a file: {source}")
+    for source, destination in pairs:
+        print(f"  {destination}: {source} ({family})")
     return pairs
 
 
@@ -425,6 +398,14 @@ def build_ipk(output_path, serial_number="UNIVERSAL", dry_run=False,
     Set include_flash=False for a non-flash variant that works with the
     existing vanilla PM3 firmware.
     """
+    # Fail before collecting/writing an archive, including during a dry run.
+    # Preserve an existing output package when a required input is unavailable.
+    try:
+        device_binaries = collect_build_binaries(serial_number, include_flash=include_flash)
+    except (OSError, ValueError) as error:
+        print(f"ERROR: {error}")
+        return False
+
     # Use an ordered dict keyed by ipk_path so later entries override earlier
     # ones (e.g. build/install.so overrides orig_so/main/install.so).
     manifest_map = {}
@@ -479,7 +460,7 @@ def build_ipk(output_path, serial_number="UNIVERSAL", dry_run=False,
     _add(collect_plugins(PLUGINS_DIR))
 
     # 7. Device binaries (build/) — added LAST so they override orig_so
-    _add(collect_build_binaries(serial_number, include_flash=include_flash))
+    _add(device_binaries)
 
     # 8. Trojan mode: inject ARM binaries to pass original firmware DRM
     if trojan:
