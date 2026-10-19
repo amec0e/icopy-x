@@ -81,15 +81,15 @@ class TestMainMenuCreation:
                 text = canvas.itemcget(iid, "text")
                 assert text == "", f"Right button should be empty, got '{text}'"
 
-    def test_left_button_move(self, main_activity):
-        """Left button (M1) offers menu movement."""
+    def test_left_button_empty(self, main_activity):
+        """The root menu reserves no space or action for an M1 soft key."""
         canvas = main_activity.getCanvas()
-        # The left button text should offer Move
+        # An empty label may have no canvas item at all.
         left_btn_ids = canvas.find_withtag("tags_btn_left")
         if left_btn_ids:
             for iid in left_btn_ids:
                 text = canvas.itemcget(iid, "text")
-                assert text == "Move"
+                assert text == ""
 
     def test_16_menu_items(self, main_activity):
         """ListView includes iCS Decoder and Settings."""
@@ -122,6 +122,17 @@ class TestMainMenuCreation:
     def test_initial_selection_is_0(self, main_activity):
         """Initial selection should be index 0 (Auto Copy)."""
         assert main_activity.lv_main_page.selection() == 0
+
+    def test_default_layout_ignores_obsolete_saved_order(self, monkeypatch):
+        import config
+        monkeypatch.setattr(config, 'getValue', lambda key, default=None:
+                            '["settings_menu", "read_list", "autocopy"]'
+                            if key == 'main_menu_order' else default)
+        activity = actstack.start_activity(MainActivity)
+        assert activity.lv_main_page._max_display == 5
+        assert activity.lv_main_page._items[:5] == [
+            'Auto Copy', 'Dump Files', 'Scan Tag', 'Read Tag', 'Sniff TRF']
+        assert activity._menu_items[-1][2] == 'settings_menu'
 
 
 # ---------------------------------------------------------------------------
@@ -196,14 +207,16 @@ class TestMainMenuNavigation:
             actmain_mod._ACTIVITY_REGISTRY.update(original_registry)
             sys.modules.pop('tests.ui.activities.test_main_menu', None)
 
-    def test_m1_enters_move_mode(self, main_activity):
-        """M1 picks up the selected item without launching it."""
+    def test_m1_does_not_change_menu_or_launch(self, main_activity):
+        """M1 leaves selection, ordering and the activity stack unchanged."""
         sel_before = main_activity.lv_main_page.selection()
         stack_before = actstack.get_stack_size()
         main_activity.onKeyEvent('M1')
         assert main_activity.lv_main_page.selection() == sel_before
         assert actstack.get_stack_size() == stack_before
-        assert main_activity._move_snapshot is not None
+        assert main_activity.lv_main_page._items == [
+            main_activity._menu_label(item) for item in main_activity._menu_items]
+        assert 'Move Item' not in main_activity.getCanvas().get_all_text()
 
     def test_pwr_no_crash(self, main_activity):
         """PWR key should not crash (stub for shutdown flow)."""
@@ -400,8 +413,8 @@ class TestMainMenuJSON:
     def test_json_right_button_null(self, menu_json):
         assert menu_json["screen"]["buttons"]["right"] is None
 
-    def test_json_left_button_move(self, menu_json):
-        assert menu_json["screen"]["buttons"]["left"] == "Move"
+    def test_json_left_button_empty(self, menu_json):
+        assert menu_json["screen"]["buttons"]["left"] is None
 
     def test_json_first_item_autocopy(self, menu_json):
         first = menu_json["screen"]["content"]["items"][0]
