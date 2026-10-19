@@ -1,7 +1,7 @@
 # Pilot evaluation record
 
 19 October 2026. These are offline results, not a live Astra quality evaluation.
-The 21 contract tests pass on local Windows/Python 3.12. Workflow syntax passes
+The 22 contract tests pass on local Windows/Python 3.12. Workflow syntax passes
 actionlint 1.7.12. Linux/Windows CI results belong to the associated PR checks.
 
 Four historical comparisons were prepared directly from immutable Git objects:

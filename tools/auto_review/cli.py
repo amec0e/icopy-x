@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from .reviewer import review
-from .snapshots import collect, digest
+from .snapshots import canonical, collect, digest
 
 
 def main(argv=None):
@@ -32,6 +32,9 @@ def main(argv=None):
             raise ValueError('Review requires a bounded statement of the intended PR outcome')
         bundle = collect(args.repo, args.base, args.head, args.context, args.max_bytes, args.max_file_bytes)
         bundle['stated_purpose'] = args.purpose
+        budget_gap = 'serialized bundle exceeds input budget'
+        if len(canonical(bundle)) > args.max_bytes and not any(g['reason'] == budget_gap for g in bundle['gaps']):
+            bundle['gaps'].append(dict(path='', side='', reason=budget_gap))
         (args.output / 'snapshot.json').write_text(json.dumps(bundle, indent=2), encoding='utf-8')
         report.update(base=bundle['base'], head=bundle['head'], snapshot_sha256=digest(bundle), gaps=bundle['gaps'])
         if args.operation == 'prepare':

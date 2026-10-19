@@ -239,6 +239,15 @@ class PilotTests(unittest.TestCase):
         self.assertEqual(report['status'], 'INCOMPLETE')
         self.assertNotIn('review', report)
 
+    def test_stated_purpose_counts_against_snapshot_budget(self):
+        args = ['prepare', '--repo', str(self.repo), '--base', self.base, '--head', self.head,
+                '--purpose', 'X' * 2000, '--max-bytes', '1500',
+                '--output', str(self.root / 'purpose-budget')]
+        self.assertEqual(cli.main(args), 2)
+        report = json.loads((self.root / 'purpose-budget/report.json').read_text())
+        self.assertEqual(report['status'], 'INCOMPLETE')
+        self.assertTrue(report['gaps'])
+
 
 if __name__ == '__main__':
     unittest.main()
