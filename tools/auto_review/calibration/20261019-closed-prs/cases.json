@@ -1,0 +1,42 @@
+[
+  {
+    "id": "closed-pr80-81",
+    "kind": "historical-rejected",
+    "base": "12cb73acff0295959628fffafde1404e79fdae69",
+    "head": "63726d4d5d8ac2490241e3f9045398ae851fc59f",
+    "profile": "manual",
+    "purpose": "Fix ICS Decoder issues #58-61: recognize iCLASS WRBL success, recover after failed writes, filter serial enumeration using USB VID/PID, and log the complete block-7 field.",
+    "context": [
+      "src/middleware/executor.py",
+      "src/middleware/pm3_compat.py",
+      "src/middleware/hficlass.py",
+      "src/main/main.py",
+      "src/lib/activity_main.py",
+      "tests/ui/test_pm3_response_compat.py",
+      "tests/ui/conftest.py"
+    ],
+    "searches": [
+      "_KW_WRBL_SUCCESS",
+      "_normalize_iclass_wrbl",
+      "detect_decoder(",
+      "raw_blk7"
+    ],
+    "expectations": {
+      "must_find": [
+        "The new success regex accepts unsuccessful and not successful; a write can be reported successful on failure text.",
+        "When no allowlisted USB device is present, the filter falls back to every ACM/USB port (and COM1..256 on Windows); it does not exclude the internal PM3. This fails the stated prevention goal, although the unsafe broad fallback predates the PR.",
+        "The added full-key log does not fix a demonstrated truncation in this source: raw and normalized block-7 fields were already retained. It labels invalid raw values as Key before validation.",
+        "The added tests assert helper outputs and stop-call counts, not bus recovery or effective discovery safety."
+      ],
+      "must_not": [
+        "Claim the Who/ISE handshake was removed or absent.",
+        "Invent current operation-ownership APIs in this historical executor.",
+        "Treat hardware testing claims in comments as verified physical evidence."
+      ],
+      "expected_scope": "Four related but independently reviewable claimed fixes; no build or branding changes in this narrow tree."
+    },
+    "snapshot_sha256": "5da736622550e49f9f6ca45fc5435f36ef7eee7139e4e4cb375343973b70a160",
+    "policy_sha256": "d2d661801a56c0b56587d8322c96113f5841de8ee063927ba912e11769320ffa",
+    "initial_request_bytes": 920235
+  }
+]

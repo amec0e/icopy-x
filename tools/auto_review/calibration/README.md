@@ -150,3 +150,57 @@ the attempt and call records for failure preservation; the result totals count
 it once. This trial records known usage and no transport timeout. It is not a
 review-quality pass or a basis for automatic publication. The next generation-
 budget calibration needs its own explicit bounds and predeclared expectations.
+
+## Generous-budget baseline, 19 October 2026
+
+At the maintainer's request, #102 raised the per-pass output allowance to
+128,000 tokens and the overall scheduling budget to 90 minutes before tuning
+production limits. The model, high reasoning, three-pass structure, snapshot,
+policy and 120-second HTTP inactivity timeout were unchanged. One comparison
+ran once, without retries. Its [case](20261019-baseline/cases.json) and
+[result and source assessment](20261019-baseline/results.json) preserve that baseline.
+
+All three generations returned validated reviews in 691.602 seconds total. They
+used 10,345, 9,594 and 7,808 output tokens, including reasoning; none hit a cap.
+The final review deliberately declared incomplete coverage because the supplied
+profile lacked a QEMU wrapper and foreground activity tests. The red workflow
+therefore denotes an advisory coverage gap, not another timeout or lost review.
+No further paid run was sent merely to obtain a complete label.
+
+The review identified a swallowed QEMU isolation assertion, menu-focus loss,
+reverse serial-handoff and Windows attachment-cache issues. Its saved-credential
+navigation recommendation also needs the maintainer's product decision: do not
+undo the explicit requirement to hide the decoder entry when disconnected.
+Its historical contributor-credits finding is already fixed on main. The record
+separates these outcomes instead of accepting every model recommendation.
+
+Returned usage totals are 890,138 input and 27,747 output tokens, with 590,010
+cached-input and 295,005 cache-write tokens. Published Astra pricing gives an
+estimated **$10.74** including the large-context rates, not an invoice. This is
+useful calibration evidence, not enough to establish latency percentiles,
+general review accuracy or a production budget. The generous limits remain
+while representative results accumulate; the failed 6,000-token run is retained.
+
+## Closed PRs #77–81
+
+The [manual source audit](../../../docs/reviews/2026-10-19-pr77-81.md) found only
+two distinct submitted trees. The broad #77–79 tree exceeds the collector's
+changed-path limit and made [zero API calls](20261019-closed-prs/broad-preflight.json).
+Its renamed assets and encoded Python were audited directly. This is not a model
+review of that tree, and no duplicate paid comparisons were submitted.
+
+The narrower #80–81 tree received one three-pass comparison with historical
+executor/compatibility/caller context and [predeclared expectations](20261019-closed-prs/cases.json).
+All three generations returned validated proposals in 423.042 seconds, using
+7,342, 4,173 and 6,630 output tokens. Estimated cost was **$4.68**, with known
+usage for every generation and no retry, truncation or transport timeout.
+The [result and source assessment](20261019-closed-prs/results.json) retain the
+explicit gaps: rftask, localization and parity fixtures were not supplied.
+
+The review corroborated ineffective serial isolation, cross-task cancellation
+and automatic credential logging. It additionally identified test dependency
+leakage from `importlib.reload`. It recognized the regex counterexamples but
+conservatively declined to claim an observed client failure without transcripts.
+The assessment distinguishes that from the manual audit's conditional parser
+defect. Both retain the Who/ISE handshake and distinguish historical debt from
+current-main behavior. The verdict remains: keep the PRs closed.

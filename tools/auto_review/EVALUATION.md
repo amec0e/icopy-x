@@ -488,6 +488,16 @@ unexpected supported findings must be assessed instead of discarded. The corpus
 is small, selected and partly synthetic, with no independent human labeling or
 statistical accuracy claim.
 
+Update after #102: the maintainer authorized generous baseline limits instead
+of further incremental cap increases. [Run 39297199836](https://github.com/lab-401/icopy-x/actions/runs/39297199836)
+returned all three validated passes in 11.53 minutes with no transport or token
+failure. Its final coverage declaration is incomplete, with useful findings and
+named missing source. See the [preserved source assessment](calibration/20261019-baseline/results.json).
+The historical twelve-minute/6,000-token limits described above no longer apply
+to the current pilot. The new limits are 128,000 tokens per pass, 90 minutes
+overall and a 100-minute workflow. Do not describe this successful return as a
+timeout, or turn a qualified advisory into a merge approval.
+
 Before automatic invocation/publication:
 
 1. Calibrate generation budgets against representative small and large changes,
