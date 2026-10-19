@@ -133,7 +133,7 @@ def test_matching_block_seven_verifies(pm3):
 def test_decoder_probe_never_opens_internal_pm3(monkeypatch):
     opened = []
     port = SimpleNamespace(reset_input_buffer=lambda: None,
-                           write=lambda data: None, readline=lambda: b'ISE\r\n')
+                           write=lambda data: None, readline=lambda size: b'ISE\r\n')
     monkeypatch.setattr(decoder.sys, 'platform', 'linux')
     monkeypatch.setattr(decoder, 'serial', object())
     monkeypatch.setattr(decoder.glob, 'glob', lambda pattern:
@@ -148,7 +148,7 @@ def test_decoder_probe_never_opens_internal_pm3(monkeypatch):
 def test_decoder_handshake_requires_exact_identity(monkeypatch):
     closed = []
     port = SimpleNamespace(reset_input_buffer=lambda: None, write=lambda data: None,
-                           readline=lambda: b'NOISE\r\n', close=lambda: closed.append(True))
+                           readline=lambda size: b'NOISE\r\n', close=lambda: closed.append(True))
     monkeypatch.setattr(decoder.sys, 'platform', 'linux')
     monkeypatch.setattr(decoder, 'serial', object())
     monkeypatch.setattr(decoder.glob, 'glob', lambda pattern: ['/dev/ttyACM1'])

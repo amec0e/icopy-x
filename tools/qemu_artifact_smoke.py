@@ -111,6 +111,7 @@ def main(argv=None):
             report['critical_inputs_sha256'] = {
                 name: sha256(guest.parent / name) for name in
                 ('critical_flows.py', 'strict_transport.py', 'ultralight_cases.py', 'recovery_transport.py',
+                 'decoder_menu_case.py',
                  'critical_cases.json', 'transcripts.json')}
             report['boundary'] = 'packaged ARM/Tk critical flows with scripted hardware boundaries; no RF, flashing or boot chain'
         extracted = output / 'app'
