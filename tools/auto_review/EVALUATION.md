@@ -2,7 +2,7 @@
 
 19 October 2026. Offline contracts and an initial live integration trial are
 recorded separately below; review quality is not yet established.
-The 27 contract tests pass on local Windows/Python 3.12. Workflow syntax passes
+The initial 27 contract tests passed on local Windows/Python 3.12. Workflow syntax passed
 actionlint 1.7.12. Linux/Windows CI results belong to the associated PR checks.
 
 Four historical comparisons were prepared directly from immutable Git objects:
@@ -143,22 +143,109 @@ tokens, 3,431 cached-input tokens and 161.683 API seconds. Larger manually selec
 context approximately doubled input usage compared with the first clean trial,
 without closing the repository-wide evidence gap.
 
+## Stable-prefix cache trial
+
+After [#92](https://github.com/lab-401/icopy-x/pull/92),
+[run 39260082541](https://github.com/lab-401/icopy-x/actions/runs/39260082541)
+repeated the menu-introduction comparison from trusted main
+`985ad49b6c7358debe153e3dc0226b7781a3a681`. Snapshot and policy digests matched
+the previous numbered-source trial. Prompt format `numbered-source-v2` places
+the changing pass instruction and untrusted prior proposal after a stable
+policy/schema/source prefix with an explicit cache boundary.
+
+All three responses validated. The P2 Move finding at `src/lib/actmain.py:268`
+and independent ICS registry/icon scope concerns remained. The model explicitly
+distinguished missing activity implementation context from proof that a class
+was absent. Coverage remained `INCOMPLETE` for the deliberately unchanged minimal
+context. This retest evaluates cache reuse, not resolution of those gaps.
+
+| Pass | Input tokens | Cached input | Cache writes | Output tokens | API seconds |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Scope | 104,500 | 0 | 104,470 | 3,219 | 72.234 |
+| Domain | 105,561 | 104,470 | 0 | 2,732 | 57.674 |
+| Evidence challenge | 105,593 | 104,470 | 0 | 2,898 | 64.636 |
+
+Total: 315,654 input tokens, 8,849 output tokens, 208,940 cached input tokens,
+104,470 cache-write tokens and 194.544 API seconds. The previous comparable run
+recorded zero cached tokens and 315,551 cache writes. Reuse is now demonstrated;
+this trial does not demonstrate lower latency or a particular billing reduction.
+The artifact digest and final review contract were independently checked.
+
+## Reference evidence for the removal control
+
+[PR #93](https://github.com/lab-401/icopy-x/pull/93) adds bounded literal Git
+searches, including non-text match metadata, without allowing candidate code
+execution or changing full-source finding validation. All 37 offline tests
+passed locally and on Linux/Windows CI. Workflow lint, host tests, full builds
+and [QEMU run 39260839445](https://github.com/lab-401/icopy-x/actions/runs/39260839445)
+passed before merge. The merged tree matched tested head
+`985efcb75ad2d6d046f85c0da76bbbfaa4725da8`.
+
+The removal-control snapshot retains #82's base/head and stated purpose.
+It extends the earlier nine-file context with `src/lib/application.py`,
+`src/lib/_state_machine.py`, `tools/qemu_artifact_smoke.py` and
+`tests/ui/activities/test_ics_decoder.py`, then searches both commits for:
+
+```json
+["menu_order", "saved_ids", "ordered_items", "save_items", "main_menu.json",
+ "_refresh_menu", "_pick_up_item", "_move_item", "_place_item", "_cancel_move",
+ "_move_snapshot"]
+```
+
+Offline preparation produced snapshot SHA-256
+`6634e432e8a832c9998afdc640fb3de81a5d77466e9f80b7e2309af893374006`,
+835,349 canonical bytes with no collection gaps. A simulated transport probe
+measured the first real-format request at 1,011,060 bytes; it made no API call
+and is not review-quality evidence. Search recorded 61 base and 8 head matches.
+The head matches are the obsolete preference assertion, five JSON references
+and two `_move_item` byte matches inside the unchanged Windows GLib DLL.
+Those DLL hits retain metadata with `text_unavailable`; they are not silently
+discarded as absence or treated as source-reviewed caller implementations.
+
+[Run 39261258391](https://github.com/lab-401/icopy-x/actions/runs/39261258391),
+from trusted main `60ebc1c3520ba898edd9433127134e3d67c320ce`, used that exact
+snapshot and policy SHA-256
+`b5bfda1fd207ee72233a988e7759ad45fe043b24f47ba27f0f3a0d6138d2f2da`.
+All three responses validated and the final result was `ADVISORY_COMPLETE`:
+all six changed paths were covered, with no introduced-defect findings and no
+additional source-context request. The artifact digest and final review contract
+were independently verified. Manual assessment agrees that the source change
+is a coherent removal and the supplied searches resolve the identified literal
+caller questions without proving absence of every possible dynamic reference.
+
+The review recognized the GLib hits as unrelated to the deleted Python helpers.
+It kept the pre-existing M2 dispatch caveat separate and noticed the unchanged
+contributor-credits expectation in the historical accessory test. That expectation
+was subsequently removed by #85; this historical observation does not describe a
+new defect on current main. The proposed physical checks concern keypad/LCD,
+layout and menu behavior, without demanding cards, ICS hardware or flashing.
+The model did not claim to execute tests or verify hardware/CI. This complete
+source review is not merge approval or device acceptance.
+
+Recorded usage: 819,969 input tokens, 6,697 output tokens, 545,582 cached input
+tokens, 272,791 cache-write tokens and 169.370 API seconds. Both later passes
+reused 272,791 input tokens. Added context increases the first-pass cost; cache
+reuse does not make arbitrary context expansion free. This result combines new
+reference evidence, four additional source files and policy guidance, so it
+does not isolate the contribution of any single change to model completion.
+
 ## Acceptance and next work
 
-The service-account/GitHub execution path works. Nine post-fix Responses passed
-validation across three live trials. The known Move regression was identified,
-and the two removal trials produced no introduced-defect findings. Their final
-semantic coverage remained explicitly incomplete; no live trial has yet earned
-`ADVISORY_COMPLETE`. The first pre-fix rejected response remains unexplained.
+The service-account/GitHub execution path works. Fifteen post-diagnostic-fix
+Responses passed validation across five live trials. The known Move regression
+was identified twice. Three removal controls produced no introduced-defect
+findings; the last reached `ADVISORY_COMPLETE` after reference/context expansion.
+The earlier incomplete reports remain evidence of the pilot's limitations, and
+the first pre-fix rejected response remains unexplained.
 
-Before automatic invocation, the next collector work should provide bounded,
-source-addressed reference searches and caller context from the immutable Git
-objects, with explicit limits and gaps. It must not execute candidate code or
-weaken the complete-file inventory/citation checks. Evaluate useful context
-selection and prompt-cache reuse before multiplying paid trials: the three passes
-currently resend large bundles with very little cache reuse. The labeled Lua,
+Bounded reference searches and stable-prefix cache reuse are now implemented
+and exercised live. Maintainers still select search terms and caller context;
+the collector does not autonomously discover the dependency graph. One complete
+clean case does not establish a false-positive rate, and repeated runs of the
+same two changes are not a broad accuracy benchmark. Before automatic invocation,
+evaluate context selection and the labeled Lua,
 serial-ownership, contributor-credits, legitimate startup and injection cases
-listed above remain required. None of these results is a merge gate, hardware
+listed above. None of these results is a merge gate, hardware
 acceptance, statistical quality score or basis for automatic publication.
 
 The environment secret belongs in GitHub; a developer workstation is not part
