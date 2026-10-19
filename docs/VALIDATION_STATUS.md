@@ -92,6 +92,12 @@ passing tests do not remove their dependency advisories. Modern host tooling use
 patched pins, and Dependabot checks test/station requirements and Actions weekly.
 Legacy dependency alerts remain open; see [TEST_DEPENDENCIES.md](TEST_DEPENDENCIES.md).
 These changes are separate from a device-runtime migration.
-The proposed model reviewer remains advisory future work and is not an active
-CI check. Human scope review is still required, especially for boot/update,
-translation, firmware, Lua selection, USB ownership and build changes.
+The [Astra advisory pilot](../tools/auto_review/README.md) from #88 is available as
+a manual workflow on trusted main. Its 22 offline contracts passed on Linux and
+Windows. [Hosted preparation 39248718899](https://github.com/lab-401/icopy-x/actions/runs/39248718899)
+completed without an API key and produced the same immutable snapshot digest as
+the local historical-menu trial. This validates hosted collection, not model
+quality. Live Astra evaluation awaits `OPENAI_API_KEY` in the main-only
+`astra-review` environment. Automatic invocation/publication and a model gate
+remain unimplemented. Human scope review is still required, especially for
+boot/update, translation, firmware, Lua selection, USB ownership and build changes.
