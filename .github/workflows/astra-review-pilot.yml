@@ -89,6 +89,9 @@ jobs:
           REVIEW_SEARCHES: ${{ inputs.searches }}
           REVIEW_PURPOSE: ${{ inputs.purpose }}
         run: python -m tools.auto_review.hosted review
+      - name: Show returned findings and incomplete coverage
+        if: always()
+        run: python -m tools.auto_review.report
       - name: Preserve evidence and advisory result
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

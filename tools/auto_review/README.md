@@ -103,6 +103,16 @@ file coverage, fabricated source quotes, model substitution and truncation fail
 closed. Successful call accounting survives a later failed pass; a network failure
 may still incur API usage that the client cannot record.
 
+Every finished job also writes `review.md` and an Actions job summary, including
+validated findings retained by an incomplete run. A red workflow can mean the
+model returned useful findings but declared a source-coverage gap; inspect the
+summary before treating it as a timeout. The renderer rechecks snapshot identity
+and source citations, displays repository/model text literally and never calls
+the API. Its token totals count each generation once, including late terminal
+accounting, and identify attempts whose usage is unknown. These summaries are
+not PR comments or merge approvals. For older downloaded artifacts, run
+`python -m tools.auto_review.report --directory PATH_TO_EVIDENCE` without a key.
+
 `attempts` records each planned generation before sending: pass, UTC start time,
 effective socket timeout, serialized request bytes and a unique client request ID.
 The ID is sent as `X-Client-Request-Id`; an allowlisted `x-request-id` response
