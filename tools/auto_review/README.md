@@ -60,10 +60,15 @@ malformed or oversized searches create explicit gaps and prevent API calls;
 results are never silently truncated into a false claim of absence. Search uses
 LF-based Git line numbers; full-source citation validation remains unchanged.
 
-Each live invocation makes at most three API requests, no retries, with a 6,000
-output-token cap per request (including reasoning). Default source/bundle limits
-are 2 MB total and 1 MB per file. The job has a 12-minute wall-clock limit; API
-socket timeouts are 120 seconds. These are work limits, **not a dollar ceiling**.
+Each live invocation submits at most three generations, no retries, with a 6,000
+output-token cap per generation (including reasoning). Default source/bundle
+limits are 2 MB total and 1 MB per file. Background submissions are polled every
+two seconds against the same response ID; polls do not submit new generations.
+The review scheduling deadline remains 360 seconds across all three passes.
+An individual generation can therefore exceed the former 120-second synchronous
+wait without increasing the overall review budget. HTTP socket timeouts remain
+at most 120 seconds, clamped to remaining time. The hosted job retains its
+12-minute wall-clock limit. These are work limits, **not a dollar ceiling**.
 Inspect recorded token usage and the project's API usage before expanding trials.
 The serialized model request also has to fit the bundle's total byte limit,
 including numbered source, policy, schema and previous-pass output.
@@ -85,22 +90,43 @@ file coverage, fabricated source quotes, model substitution and truncation fail
 closed. Successful call accounting survives a later failed pass; a network failure
 may still incur API usage that the client cannot record.
 
-`attempts` records each planned request before sending: pass, UTC start time,
+`attempts` records each planned generation before sending: pass, UTC start time,
 effective socket timeout, serialized request bytes and a unique client request ID.
 The ID is sent as `X-Client-Request-Id`; an allowlisted `x-request-id` response
 header and HTTP status are retained when available. These are correlation IDs,
 not retry or deduplication guarantees. `calls` separately records returned response
-metadata and token usage, linked by client ID. An empty `calls` list does not mean
-no request or no charge. A failed transport records elapsed time without inventing
+metadata and token usage, linked by client ID. For `background-v1`, each attempt
+also records its bounded `http_requests` (submit/poll/cancel), response ID/status,
+poll count and cleanup outcome. Each HTTP operation has its own correlation ID.
+`terminal_response` preserves allowlisted accounting even if a late response or
+cancellation race prevents accepting that pass. It duplicates `calls` accounting
+on success: deduplicate by response/generation identity rather than summing both.
+An empty `calls` list does not mean no request or no charge. A failed transport records elapsed time without inventing
 usage or persisting raw exceptions, headers, response bodies or credentials.
 
-The CLI atomically checkpoints `report.json` before sending and after receiving
-a response. A killed job can leave an `INCOMPLETE` report with an `in_flight`
-attempt: delivery, elapsed time and usage are then unknown, not zero. A checkpoint
-failure before send records `not_sent` and prevents the call. Earlier validated
-proposals survive later failures. The socket timeout is not an end-to-end response
-deadline; the workflow wall-clock limit remains the final bound. No automatic
-retry is added. See [OpenAI request debugging](https://developers.openai.com/api/reference/overview#debugging-requests).
+The CLI atomically checkpoints `report.json` before submitting/polling and after
+acknowledging a job/status. A checkpoint failure prevents new work; it does not
+prevent an attempt to cancel an already known active job. A lost submission
+acknowledgement is never retried: delivery, completion and usage remain unknown.
+Earlier validated proposals survive later failures. See
+[OpenAI request debugging](https://developers.openai.com/api/reference/overview#debugging-requests).
+
+On deadline, polling failure or a catchable interruption, the adapter attempts
+one cancellation of the known active response with a separate ten-second socket
+timeout. It records confirmed cancellation, an already terminal job, or an
+unconfirmed outcome. It never converts cleanup into review success or retries a
+failed generation. A hard process kill may prevent cancellation/checkpointing;
+reconcile the last recorded response ID rather than dispatch another generation.
+Without a valid response ID, cancellation is impossible. The review deadline is
+checked before/after network operations and waits; socket timeouts are inactivity
+limits, so a blocked operation can overrun it. Late responses remain incomplete;
+the workflow wall-clock limit is the final execution bound.
+
+[Background mode](https://developers.openai.com/api/docs/guides/background) uses
+`background: true` with `store: false`. Responses are still temporarily retained
+for polling (roughly ten minutes); this is not a promise of zero retention.
+Unexpected response IDs, statuses or models fail closed. Background state improves
+observability but does not establish the cause of the older synchronous timeouts.
 
 The prompt supplies source lines as `numbered_text`: a 1-based line number, a tab,
 then the original line. Quotes must exclude that prefix. `snapshot.json` retains
