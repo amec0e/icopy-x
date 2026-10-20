@@ -115,8 +115,13 @@ def press(session, request):
     if path.exists():
         raise ValueError('Action already attempted; observe, do not replay')
     observed = texts()
-    require_screen(request['expected'], observed)
     record = dict(request, before=observed, status='INTENT', time=time.time())
+    try:
+        require_screen(request['expected'], observed)
+    except ValueError as error:
+        record.update(status='REFUSED', reason=str(error))
+        atomic_json(path, record)
+        return record  # No injection attempted; preserve the actual final screen.
     atomic_json(path, record)
     inject(request['key'])
     # This acknowledges input queuing, not application processing.

@@ -145,6 +145,13 @@ the resulting screen use `acknowledge --operator-confirmed`. The PC handover
 commands resolve their own expected disconnect through operator observation and
 new USB identity. They never resend the switch.
 
+A final screen-guard refusal is durably recorded as `REFUSED`, including the
+expected and observed texts, before returning without any input attempt. The
+station saves that record and reports the card case as `HARNESS_ERROR`. Only
+this explicit no-input acknowledgement clears its uncertain-action marker;
+unknown or lost replies remain uncertain. Refusal never triggers a retry or
+relaxes a guard. Inspect the private `action-<id>.json` evidence before proceeding.
+
 SSH uses absolute deadlines, simultaneous stdout/stderr draining and output
 limits. Device helpers have a 30-second alarm, even if the host disappears.
 Host PM3 processes are bounded and killed/reaped on timeout. No background key

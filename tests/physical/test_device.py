@@ -1,5 +1,6 @@
 """Linux device-helper contracts; never touches real /dev, SSH or application."""
 import importlib.util
+import json
 from pathlib import Path
 import sys
 
@@ -53,9 +54,14 @@ def test_wrong_screen_never_injects(device, monkeypatch, tmp_path):
     def unexpected(key):
         pytest.fail('Injected on wrong screen')
     monkeypatch.setattr(device, 'inject', unexpected)
-    with pytest.raises(ValueError, match='Unexpected screen'):
-        device.press(tmp_path, dict(action_id='a' * 32, key='OK', expected=['Read']))
-    assert not list(tmp_path.glob('*.json'))
+    request = dict(action_id='a' * 32, key='OK', expected=['Read'])
+    result = device.press(tmp_path, request)
+    assert result['status'] == 'REFUSED'
+    assert result['before'] == ['PC-Mode', 'Start']
+    assert json.loads((tmp_path / ('a' * 32 + '.json')).read_text()) == result
+    monkeypatch.setattr(device, 'texts', lambda: ['Read'])
+    with pytest.raises(ValueError, match='already attempted'):
+        device.press(tmp_path, request)
 
 
 def test_key_ack_means_queued_and_all_named_buttons_use_hmi_queue(device, monkeypatch, tmp_path):
@@ -99,6 +105,6 @@ def test_numeric_progress_guard_rechecks_before_input(device, monkeypatch, tmp_p
         assert device.press(tmp_path, request)['before'] == observed
         assert sent == ['PWR']
     else:
-        with pytest.raises(ValueError, match='Unexpected screen'):
-            device.press(tmp_path, request)
-        assert sent == [] and not list(tmp_path.glob('*.json'))
+        result = device.press(tmp_path, request)
+        assert result['status'] == 'REFUSED' and result['before'] == observed
+        assert sent == []

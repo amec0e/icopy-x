@@ -71,6 +71,47 @@ def test_unknown_action_persists_across_restart_and_is_not_replayed(controller):
     assert restarted.state['uncertain_action']
 
 
+def test_guard_refusal_preserves_screen_and_resolves_only_known_no_input(controller):
+    def refuse(session, operation, **kwargs):
+        return dict(status='REFUSED', before=['Read successful'], **kwargs)
+    controller.transport.call = refuse
+    with pytest.raises(station.ScreenGuardRefused, match='no key sent'):
+        controller.key('PWR', ['ChkDIC...0/32keys'])
+    assert controller.state['uncertain_action'] is None
+    records = list(controller.directory.glob('action-*.json'))
+    assert len(records) == 1
+    record = station.read(records[0])
+    assert record['before'] == ['Read successful'] and record['status'] == 'REFUSED'
+    assert station.read(controller.path)['uncertain_action'] is None
+
+
+def test_unknown_acknowledgement_keeps_action_uncertain(controller):
+    controller.transport.call = lambda *args, **kwargs: {'status': 'UNKNOWN'}
+    with pytest.raises(RuntimeError, match='remains uncertain'):
+        controller.key('PWR', ['Read'])
+    assert controller.state['uncertain_action']
+    assert station.read(controller.path)['uncertain_action']
+
+
+def test_cancel_guard_refusal_is_harness_error_without_retry(controller, monkeypatch):
+    sent = []
+    monkeypatch.setattr(controller, 'observe', lambda **kwargs: ['Read'])
+    monkeypatch.setattr(controller, 'wait', lambda *args: ['ChkDIC...0/32keys'])
+
+    def key(button, expected):
+        sent.append(button)
+        if button == 'PWR':
+            raise station.ScreenGuardRefused('phase ended')
+
+    monkeypatch.setattr(controller, 'key', key)
+    fixture = dict(start_texts=['Read'], busy_texts=['ChkDIC...0/32keys'],
+                   success_texts=['Read successful'])
+    with pytest.raises(station.ScreenGuardRefused):
+        controller.read_card(fixture, cancel=True)
+    assert sent == ['OK', 'PWR']
+    assert controller.state['cases'][-1]['status'] == 'HARNESS_ERROR'
+
+
 def test_handover_intent_precedes_key_and_disconnect_is_not_retried(controller, monkeypatch):
     monkeypatch.setattr(station, 'ports', lambda: [])
     controller.transport.fail_key = True
