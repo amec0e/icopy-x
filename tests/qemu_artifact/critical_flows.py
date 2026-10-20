@@ -19,6 +19,7 @@ from strict_transport import Transcript, ConnectionTranscript
 from recovery_transport import RecoveryTranscript
 import ultralight_cases
 import decoder_menu_case
+import decoder_worker_case
 
 
 PROFILE = json.loads(Path(__file__).with_name('critical_cases.json').read_text())
@@ -258,6 +259,8 @@ def run(root, output, variant, callback_errors):
                 elif name == 'decoder_menu_hotplug':
                     decoder_menu_case.run(main, root, pump)
                     activity = main
+                elif name == 'decoder_worker_lifecycle':
+                    activity, row['decoder_workers'] = decoder_worker_case.run(root, pump)
                 elif mfu:
                     is_auto = name == 'mfu_auto_partial'
                     activity = (actstack.start_activity(activity_main.AutoCopyActivity) if is_auto else

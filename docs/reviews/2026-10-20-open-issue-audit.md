@@ -18,8 +18,8 @@ or certify a physical co-processor reset. No source badge was written.
 The separate [issue #10 sidecar assessment](2026-10-20-update-sidecars.md)
 checks the newly reported orphaned metadata layout and a published release.
 
-The remaining decoder read/write/verify workers still contain worker-side Tk
-dispatch outside the discovery path fixed by #109. That is a separate lifecycle
-audit boundary; these transport tests do not certify those UI paths. A correction
-must preserve generation guards, serial ownership, and both firmware families,
-with held-completion tests before physical accessory acceptance.
+This audit also identified worker-side Tk dispatch in decoder read/write/verify,
+outside the discovery path fixed by #109. The subsequent
+[lifecycle correction](2026-10-20-decoder-workers.md) covers those paths with
+held-completion tests. These transport tests alone do not certify the UI or
+physical accessory behavior.

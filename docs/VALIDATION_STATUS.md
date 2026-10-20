@@ -13,8 +13,8 @@ Required build failures prevent QEMU success. No physical device or private
 factory image is needed on a contributor's computer.
 
 The trusted QEMU harness runs the exact built flash and no-flash IPKs under ARM
-Python 3.8.0 and Tcl/Tk 8.6.5. Its `critical-v6` profile has 23 cases per variant,
-46 combinations. It exercises packaged application code, real Tk/threads,
+Python 3.8.0 and Tcl/Tk 8.6.5. Its `critical-v7` profile has 24 cases per variant,
+48 combinations. It exercises packaged application code, real Tk/threads,
 translation/parsing, Reader behavior, cancellation and selected transport faults.
 PM3 responses and hardware boundaries are controlled fixtures. It does not run
 the physical PM3, boot the device kernel or prove RF/USB/flashing behavior.
@@ -86,8 +86,11 @@ exercise both firmware families through the real writer, translation, executor,
 TCP and daemon-reader layers with controlled child output. They verify supported
 success responses, first-block failure, cancellation/timeout and fresh-command
 recovery without replay. Physical iCLASS write-abort recovery remains unverified.
-Remaining decoder read/write/verify worker-side Tk dispatch needs a separate
-lifecycle correction; the discovery fix in #109 does not certify those paths.
+The [decoder worker correction](reviews/2026-10-20-decoder-workers.md) moves
+read/write/verify completion and timer changes onto the UI thread, snapshots
+inputs and discards cancelled work. Host regressions and a dedicated ARM/Tk
+case cover held completions and exit during detection. Synchronous blank-target
+polling and genuine accessory acceptance remain separate limits.
 
 ## Next physical acceptance work
 
