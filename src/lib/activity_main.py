@@ -8245,6 +8245,11 @@ class IClassSEActivity(BaseActivity):
         self._decoder_session = None
         self._discovery_results = queue.Queue()
         self._discovery_timer = None
+        self._operation_results = queue.Queue()
+        self._operation = None
+        self._operation_timer = None
+        self._read_generation = 0
+        self._read_in_flight = False
         self._state = self.STATE_READING
         self._poll_timer = None
         self._target_poll_timer = None
@@ -8352,6 +8357,57 @@ class IClassSEActivity(BaseActivity):
                 logger.exception('Could not close ICS Decoder handle')
             self._ser = None
 
+    def _cancel_operation(self):
+        """Invalidate pending work without blocking Tk on device I/O."""
+        if self._operation is not None:
+            self._operation.set()
+            self._operation = None
+        if self._operation_timer is not None:
+            self.getCanvas().after_cancel(self._operation_timer)
+            self._operation_timer = None
+
+    def _start_operation(self, work, completed):
+        """Called by Tk. Workers publish data; only this timer delivers it."""
+        import threading
+        if self._state == self.STATE_DESTROYED:
+            return
+        self._cancel_operation()
+        cancelled = threading.Event()
+        self._operation = cancelled
+
+        def run():
+            result, error = None, None
+            try:
+                if not cancelled.is_set():
+                    result = work(cancelled)
+            except Exception as exc:
+                logger.exception('ICS Decoder operation failed')
+                error = exc
+            self._operation_results.put((cancelled, result, error))
+
+        def poll():
+            if self._operation is not cancelled:
+                return
+            self._operation_timer = None
+            while True:
+                try:
+                    token, result, error = self._operation_results.get_nowait()
+                except queue.Empty:
+                    break
+                if token is cancelled:
+                    self._operation = None
+                    completed(result, error)
+                    return
+                # A previous read or activity lifetime cannot replace this result.
+            self._operation_timer = self.getCanvas().after(50, poll)
+
+        self._operation_timer = self.getCanvas().after(50, poll)
+        try:
+            self.startBGTask(run)
+        except Exception as exc:
+            # Thread startup failures follow the same UI error completion path.
+            self._operation_results.put((cancelled, None, exc))
+
     def _on_decoder_found(self, ser, generation=None):
         """Called on main thread after decoder detection completes."""
         if self._state == self.STATE_DESTROYED:
@@ -8442,18 +8498,27 @@ class IClassSEActivity(BaseActivity):
 
     def _poll_decoder(self):
         self._poll_timer = None
-        # Guard: stop if destroyed, not reading, or no serial port
-        if self._state == self.STATE_DESTROYED:
+        if self._state != self.STATE_READING or self._ser is None or self._read_in_flight:
             return
-        if self._state != self.STATE_READING or self._ser is None:
-            return
+        self._read_in_flight = True
+        serial_port, generation = self._ser, self._read_generation
 
-        try:
+        def read(cancelled):
             import ics_decoder
-            block = ics_decoder.read_card(self._ser)
-        except Exception:
-            block = None
+            return ics_decoder.read_card(serial_port)
 
+        def completed(capture, error):
+            if error is not None:
+                capture = {'status': 'decoder_error', 'format': 'Unknown/Unsupported'}
+            self._on_read_finished(capture, serial_port, generation)
+
+        self._start_operation(read, completed)
+
+    def _on_read_finished(self, block, serial_port, generation):
+        if (generation != self._read_generation or self._state != self.STATE_READING or
+                serial_port is not self._ser):
+            return
+        self._read_in_flight = False
         if block is not None:
             blk7 = block.get('blk7', '')
             if blk7:
@@ -8487,76 +8552,54 @@ class IClassSEActivity(BaseActivity):
         return True
 
     def _do_write(self):
-        source = self._source_data
-        if not source:
-            self._last_write_ok = False
-            self._verify_success = None
-            self._verify_msg = ''
-            self._verify_msg2 = ''
-            self._schedule_write_done()
+        """Snapshot the selected credential and start work from the UI thread."""
+        import copy
+        if self._state == self.STATE_DESTROYED:
             return
-
-        # Stop all polling timers to prevent serial port lock collisions
+        source = copy.deepcopy(self._source_data)
+        selected_target_type = self._target_type
         self._stop_poll()
         self._stop_target_poll()
+        self._state = self.STATE_WRITING
+        self.setbusy()
+        self._render_writing_state()
+        self._start_operation(
+            lambda cancelled: self._write_target_bg(cancelled, source, selected_target_type),
+            self._write_completed)
 
-        try:
-            import ics_decoder
-            # Re-detect target before writing to ensure card is still present
-            selected_target_type = self._target_type
-            self._target_type = ics_decoder.detect_target()
-            if (self._target_type not in (self.TARGET_HF_ICLASS, self.TARGET_LF_T5577) or
-                    not self._write_target_available(source, self._target_type, selected_target_type)):
-                self._write_blocked_reason = 'target_not_compatible'
-                self._last_write_ok = False
-                self._verify_success = None
-                self._verify_msg = ''
-                self._verify_msg2 = ''
-                self._schedule_write_done()
-                return
+    def _write_target_bg(self, cancelled, source, selected_target_type):
+        import ics_decoder
+        if not source:
+            return selected_target_type, False, None
+        target = ics_decoder.detect_target()
+        if cancelled.is_set():
+            return None  # Exit during detection must not start a write.
+        if (target not in (self.TARGET_HF_ICLASS, self.TARGET_LF_T5577) or
+                not self._write_target_available(source, target, selected_target_type)):
+            return target, False, 'target_not_compatible'
+        if target == self.TARGET_LF_T5577:
+            fc, cid = source.get('fc', 0), source.get('id', 0)
+            if not ics_decoder.is_valid_26bit(fc, cid):
+                return target, False, 'non_26bit_lf'
+            if cancelled.is_set():
+                return None
+            ok = ics_decoder.write_to_t5577(fc, cid)
+        else:
+            blk7 = source.get('blk7', '')
+            if cancelled.is_set():
+                return None
+            ok = ics_decoder.write_to_card(blk7) if blk7 else False
+        return target, ok, None
 
-            fc = source.get('fc', 0)
-            cid = source.get('id', 0)
-            is_26bit = ics_decoder.is_valid_26bit(fc, cid)
-
-            if self._target_type == self.TARGET_LF_T5577:
-                if not is_26bit:
-                    self._last_write_ok = False
-                    self._write_blocked_reason = 'non_26bit_lf'
-                    self._verify_success = None
-                    self._verify_msg = ''
-                    self._verify_msg2 = ''
-                    self._schedule_write_done()
-                    return
-                self._write_blocked_reason = None
-                ok = ics_decoder.write_to_t5577(fc, cid)
-            else:
-                self._write_blocked_reason = None
-                blk7 = source.get('blk7', '')
-                ok = ics_decoder.write_to_card(blk7) if blk7 else False
-        except Exception:
-            ok = False
-
+    def _write_completed(self, result, error):
+        if error is not None:
+            result = (None, False, None)
+        self._target_type, ok, self._write_blocked_reason = result
         self._last_write_ok = ok
         self._verify_success = None
         self._verify_msg = ''
         self._verify_msg2 = ''
-
-        self._schedule_write_done()
-
-    def _schedule_write_done(self):
-        """Marshal every completion path to Tk; never redraw a destroyed UI."""
-        from lib import actstack
-        if self._state == self.STATE_DESTROYED:
-            return
-        if actstack._root is None:
-            self._on_write_done()
-            return
-        try:
-            actstack._root.after(0, self._on_write_done)
-        except Exception:
-            # A closing Tk root cannot accept UI work from this worker.
-            pass
+        self._on_write_done()
 
     def _on_write_done(self):
         if self._state == self.STATE_DESTROYED:
@@ -8876,26 +8919,25 @@ class IClassSEActivity(BaseActivity):
         if key in (KEY_OK, KEY_M2):
             if self._state == self.STATE_WAIT_BLANK:
                 if self._source_data:
-                    self._stop_target_poll()
-                    self._state = self.STATE_WRITING
-                    self.setbusy()
-                    self._render_writing_state()
-                    self.startBGTask(self._do_write)
+                    self._do_write()
             elif self._state == self.STATE_RESULT:
                 if self._source_data:
-                    self._state = self.STATE_WRITING
-                    self.setbusy()
-                    self._render_writing_state()
-                    self.startBGTask(self._do_write)
+                    self._do_write()
 
     def _do_verify(self):
         """Perform fresh verification read of target card."""
-        if not self._source_data:
+        import copy
+        if not self._source_data or self._state == self.STATE_DESTROYED:
             return
+        source, target = copy.deepcopy(self._source_data), self._target_type
+        self._stop_poll()
+        self._stop_target_poll()
         self._state = self.STATE_WRITING
         self.setbusy()
         self._render_verifying_state()
-        self.startBGTask(self._do_verify_bg)
+        self._start_operation(
+            lambda cancelled: self._do_verify_bg(cancelled, source, target),
+            self._verify_completed)
 
     def _render_verifying_state(self):
         canvas = self.getCanvas()
@@ -8921,47 +8963,27 @@ class IClassSEActivity(BaseActivity):
             tags='_ics_prompt',
         )
 
-    def _do_verify_bg(self):
-        """Background verification task."""
-        try:
-            import ics_decoder
-            detected_target = ics_decoder.detect_target()
-            if detected_target and detected_target == self._target_type:
-                success, msg = ics_decoder.verify_target_card(
-                    self._target_type, self._source_data)
-                self._verify_success = success
-                # Format message for 240px display (max ~20 chars per line)
-                if '!=' in msg:
-                    parts = msg.split('!=')
-                    self._verify_msg = parts[0].strip()[:18]
-                    self._verify_msg2 = parts[1].strip()[:18]
-                elif ' vs ' in msg:
-                    parts = msg.split(' vs ')
-                    self._verify_msg = parts[0].strip()[:18]
-                    self._verify_msg2 = parts[1].strip()[:18]
-                else:
-                    self._verify_msg = msg[:20]
-                    self._verify_msg2 = ''
-            else:
-                self._verify_success = False
-                self._verify_msg = ('Target changed' if detected_target
-                                    else 'No card on coil')
-                self._verify_msg2 = ''
-        except Exception:
-            self._verify_success = False
-            self._verify_msg = 'Verify error'
-            self._verify_msg2 = ''
+    def _do_verify_bg(self, cancelled, source, target):
+        import ics_decoder
+        detected_target = ics_decoder.detect_target()
+        if cancelled.is_set():
+            return None
+        if detected_target and detected_target == target:
+            return ics_decoder.verify_target_card(target, source)
+        return False, 'Target changed' if detected_target else 'No card on coil'
 
-        from lib import actstack
-        if self._state == self.STATE_DESTROYED:
-            return
-        if actstack._root is None:
-            self._on_verify_done()
+    def _verify_completed(self, result, error):
+        self._verify_success, msg = (False, 'Verify error') if error is not None else result
+        # Format message for 240px display (max ~20 chars per line).
+        separator = '!=' if '!=' in msg else (' vs ' if ' vs ' in msg else None)
+        if separator is not None:
+            parts = msg.split(separator, 1)
+            self._verify_msg = parts[0].strip()[:18]
+            self._verify_msg2 = parts[1].strip()[:18]
         else:
-            try:
-                actstack._root.after(0, self._on_verify_done)
-            except Exception:
-                pass
+            self._verify_msg = msg[:20]
+            self._verify_msg2 = ''
+        self._on_verify_done()
 
     def _on_verify_done(self):
         """Called on main thread after background verify completes."""
@@ -8974,6 +8996,7 @@ class IClassSEActivity(BaseActivity):
     def onDestroy(self):
         # Mark as destroyed FIRST to stop all polling/background work
         self._state = self.STATE_DESTROYED
+        self._cancel_operation()
         self._cancel_decoder_session()
         self._stop_poll()
         self._stop_target_poll()
@@ -9839,8 +9862,6 @@ class ICSDecoderActivity(IClassSEActivity):
         self._details_origin = None
         self._write_origin = None
         self._credential_store = None
-        self._read_generation = 0
-        self._read_in_flight = False
         super().__init__(bundle)
 
     def onCreate(self, bundle):
@@ -9903,6 +9924,7 @@ class ICSDecoderActivity(IClassSEActivity):
         ])
 
     def _start_read(self):
+        self._cancel_operation()
         if not self._cancel_decoder_session():
             return
         self._hide_menu()
@@ -9928,37 +9950,6 @@ class ICSDecoderActivity(IClassSEActivity):
                     pass
             return
         super()._on_decoder_found(ser)
-
-    def _poll_decoder(self):
-        self._poll_timer = None
-        if self._state != self.STATE_READING or self._ser is None or self._read_in_flight:
-            return
-        self._read_in_flight = True
-        serial_port = self._ser
-        generation = self._read_generation
-        from lib import actstack
-        if actstack._root is None:
-            self._read_decoder_bg(serial_port, generation)
-            return
-        import threading
-        threading.Thread(target=self._read_decoder_bg,
-                         args=(serial_port, generation), daemon=True).start()
-
-    def _read_decoder_bg(self, serial_port, generation):
-        try:
-            import ics_decoder
-            capture = ics_decoder.read_card(serial_port)
-        except Exception:
-            capture = {'status': 'decoder_error', 'format': 'Unknown/Unsupported'}
-        from lib import actstack
-        if actstack._root is not None:
-            try:
-                actstack._root.after(0, self._on_read_finished,
-                                     capture, serial_port, generation)
-            except Exception:
-                pass
-        else:
-            self._on_read_finished(capture, serial_port, generation)
 
     def _on_read_finished(self, capture, serial_port, generation):
         if (generation != self._read_generation or self._state != self.STATE_READING or
@@ -10187,6 +10178,7 @@ class ICSDecoderActivity(IClassSEActivity):
             self.finish()
         elif state in (self.STATE_DETECTING, self.STATE_READING):
             self._read_generation += 1
+            self._cancel_operation()
             self._cancel_decoder_session()
             self._read_in_flight = False
             self._stop_poll()
@@ -10297,11 +10289,7 @@ class ICSDecoderActivity(IClassSEActivity):
             return
         if self._state == self.STATE_WAIT_BLANK:
             if key in (KEY_OK, KEY_M2) and self._target_write_available():
-                self._stop_target_poll()
-                self._state = self.STATE_WRITING
-                self.setbusy()
-                self._render_writing_state()
-                self.startBGTask(self._do_write)
+                self._do_write()
             return
         if self._state == self.STATE_WRITING:
             return

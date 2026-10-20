@@ -361,7 +361,7 @@ def test_decode_and_details_never_start_target_poll(store, monkeypatch):
     assert activity._state == activity.STATE_DECODED and calls == []
 
 
-def test_live_read_callback_stops_on_results_without_blank_poll(store, monkeypatch):
+def test_live_read_callback_stops_on_results_without_blank_poll(store, monkeypatch, activity_workers):
     activity = start()
     activity._state = activity.STATE_READING
     activity._ser = ScriptedSerial([])
@@ -369,6 +369,8 @@ def test_live_read_callback_stops_on_results_without_blank_poll(store, monkeypat
     calls = []
     monkeypatch.setattr(activity, '_start_target_poll', lambda: calls.append('poll'))
     activity._poll_decoder()
+    activity_workers[-1].run()
+    activity.getCanvas().advance(50)
     assert activity._state == activity.STATE_DECODED
     assert activity._source_data['fc'] == 165
     assert calls == []
@@ -579,7 +581,7 @@ def test_saved_unsupported_details_keep_full_raw_capture_scrollable(store):
     ('hf_iclass', None),
     ('hf_iclass', 'unsupported'),
 ])
-def test_final_write_recheck_rejects_changed_missing_or_unknown_target(store, monkeypatch, confirmed, actual):
+def test_final_write_recheck_rejects_changed_missing_or_unknown_target(store, monkeypatch, confirmed, actual, activity_workers):
     activity = start()
     activity._source_data = captured()
     activity._target_type = confirmed
@@ -588,6 +590,8 @@ def test_final_write_recheck_rejects_changed_missing_or_unknown_target(store, mo
     monkeypatch.setattr(ics_decoder, 'write_to_card', lambda *args: calls.append('hf'))
     monkeypatch.setattr(ics_decoder, 'write_to_t5577', lambda *args: calls.append('lf'))
     activity._do_write()
+    activity_workers[-1].run()
+    activity.getCanvas().advance(50)
     assert calls == []
     assert activity._last_write_ok is False
     assert activity._state == activity.STATE_RESULT
@@ -595,7 +599,7 @@ def test_final_write_recheck_rejects_changed_missing_or_unknown_target(store, mo
 
 
 @pytest.mark.parametrize('target', ['hf_iclass', 'lf_t5577'])
-def test_final_write_recheck_rejects_unsupported_source(store, monkeypatch, target):
+def test_final_write_recheck_rejects_unsupported_source(store, monkeypatch, target, activity_workers):
     activity = start()
     activity._source_data = {'format': 'Unknown/Unsupported', 'status': 'unsupported',
                              'bit_length': 56, 'fc': 165, 'id': 1551}
@@ -605,13 +609,15 @@ def test_final_write_recheck_rejects_unsupported_source(store, monkeypatch, targ
     monkeypatch.setattr(ics_decoder, 'write_to_card', lambda *args: calls.append('hf'))
     monkeypatch.setattr(ics_decoder, 'write_to_t5577', lambda *args: calls.append('lf'))
     activity._do_write()
+    activity_workers[-1].run()
+    activity.getCanvas().advance(50)
     assert calls == []
     assert activity._last_write_ok is False
     assert activity._write_blocked_reason == 'target_not_compatible'
 
 
 @pytest.mark.parametrize('target,writer', [('hf_iclass', 'hf'), ('lf_t5577', 'lf')])
-def test_final_write_recheck_dispatches_only_confirmed_compatible_target(store, monkeypatch, target, writer):
+def test_final_write_recheck_dispatches_only_confirmed_compatible_target(store, monkeypatch, target, writer, activity_workers):
     activity = start()
     activity._source_data = captured() if target == 'hf_iclass' else validated_capture()
     activity._target_type = target
@@ -620,19 +626,23 @@ def test_final_write_recheck_dispatches_only_confirmed_compatible_target(store, 
     monkeypatch.setattr(ics_decoder, 'write_to_card', lambda *args: calls.append('hf') or True)
     monkeypatch.setattr(ics_decoder, 'write_to_t5577', lambda *args: calls.append('lf') or True)
     activity._do_write()
+    activity_workers[-1].run()
+    activity.getCanvas().advance(50)
     assert calls == [writer]
     assert activity._last_write_ok is True
     assert activity._state == activity.STATE_RESULT
 
 
-def test_verify_cannot_switch_to_another_target_family(store, monkeypatch):
+def test_verify_cannot_switch_to_another_target_family(store, monkeypatch, activity_workers):
     activity = start()
     activity._source_data = captured()
     activity._target_type = 'hf_iclass'
     calls = []
     monkeypatch.setattr(ics_decoder, 'detect_target', lambda: 'lf_t5577')
     monkeypatch.setattr(ics_decoder, 'verify_target_card', lambda *args: calls.append(args))
-    activity._do_verify_bg()
+    activity._do_verify()
+    activity_workers[-1].run()
+    activity.getCanvas().advance(50)
     assert not calls
     assert activity._verify_success is False
     assert activity._target_type == 'hf_iclass'
@@ -640,18 +650,14 @@ def test_verify_cannot_switch_to_another_target_family(store, monkeypatch):
 
 
 @pytest.mark.parametrize('source', [None, 'valid'])
-def test_early_write_failure_waits_for_tk_callback(store, monkeypatch, source):
-    from types import SimpleNamespace
+def test_early_write_failure_waits_for_tk_callback(store, monkeypatch, source, activity_workers):
     activity = start()
     activity._source_data = captured() if source else None
-    callbacks = []
     monkeypatch.setattr(ics_decoder, 'detect_target', lambda: None)
-    monkeypatch.setattr(actstack, '_root', SimpleNamespace(
-        after=lambda delay, callback: callbacks.append(callback)))
     activity._do_write()
-    assert activity._state == activity.STATE_HOME
-    assert len(callbacks) == 1
-    callbacks[0]()
+    activity_workers[-1].run()
+    assert activity._state == activity.STATE_WRITING
+    activity.getCanvas().advance(50)
     assert activity._state == activity.STATE_RESULT
 
 
@@ -779,25 +785,15 @@ def test_old_decoder_detection_cannot_claim_restarted_read(store, monkeypatch):
     assert activity._state == activity.STATE_READING
 
 
-def test_cancel_then_retry_does_not_reuse_previous_serial_response(store, monkeypatch):
-    import threading
-    jobs = []
-
-    class DeferredThread:
-        def __init__(self, target, args, daemon):
-            self.target = target
-            self.args = args
-
-        def start(self):
-            jobs.append((self.target, self.args))
-
-    monkeypatch.setattr(threading, 'Thread', DeferredThread)
+def test_cancel_then_retry_does_not_reuse_previous_serial_response(store, monkeypatch, activity_workers):
     activity = start()
     old = ScriptedSerial([[b'\x00??\r\n'], captured_lines()])
     activity._state = activity.STATE_READING
     activity._ser = old
     monkeypatch.setattr(activity, '_start_poll', lambda: None)
     activity._poll_decoder()
+    activity_workers[-1].run()
+    activity.getCanvas().advance(50)
     assert activity._state == activity.STATE_READING
     activity._back()
     assert not old.is_open
@@ -806,6 +802,8 @@ def test_cancel_then_retry_does_not_reuse_previous_serial_response(store, monkey
     activity._on_decoder_found(current, activity._read_generation)
     assert activity._ser is current
     activity._poll_decoder()
+    activity_workers[-1].run()
+    activity.getCanvas().advance(50)
     assert activity._state == activity.STATE_DECODED
     assert (activity._source_data['fc'], activity._source_data['id']) == (165, 1551)
     assert len(old.commands) == 1
@@ -883,26 +881,8 @@ def test_continuous_status_input_respects_serial_timeout_budget(monkeypatch):
     assert 45 <= serial.calls <= 50
 
 
-def test_cancelled_background_read_cannot_claim_retried_session(store, monkeypatch):
-    import threading
-    jobs = []
-    callbacks = []
-
-    class DeferredThread:
-        def __init__(self, target, args, daemon):
-            self.target = target
-            self.args = args
-
-        def start(self):
-            jobs.append((self.target, self.args))
-
-    class Root:
-        def after(self, delay, callback, *args):
-            callbacks.append((callback, args))
-
-    monkeypatch.setattr(threading, 'Thread', DeferredThread)
+def test_cancelled_background_read_cannot_claim_retried_session(store, monkeypatch, activity_workers):
     activity = start()
-    monkeypatch.setattr(actstack, '_root', Root())
     old = ScriptedSerial([[b'\x00OK\r\n'] + captured_lines()])
     activity._state = activity.STATE_READING
     activity._ser = old
@@ -915,14 +895,13 @@ def test_cancelled_background_read_cannot_claim_retried_session(store, monkeypat
     activity._ser = current
     activity._state = activity.STATE_READING
     activity._poll_decoder()
-    assert len(jobs) == 2
-    jobs[0][0](*jobs[0][1])
-    stale_callback, stale_args = callbacks.pop(0)
-    stale_callback(*stale_args)
+    assert len(activity_workers) == 2
+    activity_workers[0].run()
+    activity.getCanvas().advance(50)
     assert activity._state == activity.STATE_READING
     assert activity._source_data is None
-    jobs[1][0](*jobs[1][1])
-    current_callback, current_args = callbacks.pop(0)
-    current_callback(*current_args)
+    assert old.commands == []  # Work cancelled before launch must not send RD.
+    activity_workers[1].run()
+    activity.getCanvas().advance(50)
     assert activity._state == activity.STATE_DECODED
     assert activity._source_data['fc'] == 165
