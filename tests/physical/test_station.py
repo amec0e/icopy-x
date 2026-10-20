@@ -316,6 +316,68 @@ def test_cancel_deadline_includes_delayed_input_acknowledgement(controller, fixt
     assert [data['key'] for operation, data in controller.transport.calls if operation == 'key'] == ['OK', 'PWR']
 
 
+@pytest.mark.parametrize('fault', ['lost', 'failed', 'wrong-id', 'late', 'nan', 'wrong-screen'])
+def test_local_cancel_unconfirmed_reply_keeps_uncertainty_and_never_retries(controller, fixture, monkeypatch, fault):
+    fixture.update(start_texts=['Selected Classic'], busy_texts=['Reading...'])
+    calls = []
+    def reply(session, operation, **kwargs):
+        calls.append(operation)
+        if fault == 'lost':
+            raise TimeoutError('Lost reply')
+        result = dict(action_id=kwargs['action_id'], status='CANCELLED', cancel_ui_seconds=.2,
+                      busy_observed=['Reading...'], cancel_before=['Reading...'],
+                      returned_texts=['Selected Classic'])
+        result.update({'failed': dict(status='HARNESS_ERROR'), 'wrong-id': dict(action_id='other'),
+                       'late': dict(cancel_ui_seconds=5), 'nan': dict(cancel_ui_seconds=float('nan')),
+                       'wrong-screen': dict(cancel_before=['Successful!'])}.get(fault, {}))
+        return result
+    monkeypatch.setattr(controller.transport, 'call', reply)
+    with pytest.raises((TimeoutError, RuntimeError)):
+        controller.cancel_local(fixture)
+    assert controller.state['uncertain_action']
+    with pytest.raises(ValueError, match='Uncertain action'):
+        controller.cancel_local(fixture)
+    assert calls == ['cancel_read_local']
+
+
+@pytest.mark.parametrize('changed_on_cancel', [False, True])
+def test_local_cancel_requires_unchanged_dumps_then_reference_reread(controller, fixture, monkeypatch,
+                                                                  changed_on_cancel):
+    fixture.update(start_texts=['Selected Classic'], busy_texts=['Reading...'])
+    success = fixture['success_texts'] + ['UID: 01 23 45 67']
+    controller.transport.screen = fixture['start_texts']
+    actual = {'new.bin': dict(sha256='a' * 64, size=1024, mtime_ns=1)}
+    inventories = [{}, actual if changed_on_cancel else {}, actual]
+    operations = []
+    original_call = controller.transport.call
+    def call(session, operation, **kwargs):
+        operations.append(operation)
+        if operation == 'cancel_read_local':
+            return dict(action_id=kwargs['action_id'], status='CANCELLED', cancel_ui_seconds=.4,
+                        busy_observed=['Reading...'], cancel_before=['Reading...'],
+                        returned_texts=fixture['start_texts'])
+        if operation == 'dumps':
+            return inventories.pop(0)
+        if operation == 'key':
+            assert kwargs['key'] == 'OK'  # Fresh read only; sequence ran on device.
+            controller.transport.screen = success
+        return original_call(session, operation, **kwargs)
+    monkeypatch.setattr(controller.transport, 'call', call)
+    monkeypatch.setattr(station.time, 'sleep', lambda _: None)
+    if changed_on_cancel:
+        with pytest.raises(ValueError, match='Cancellation changed'):
+            controller.read_card(fixture, local_cancel=True)
+        assert 'key' not in operations
+        assert controller.state['cases'][-1]['status'] == 'FAIL'
+    else:
+        controller.read_card(fixture, local_cancel=True)
+        case = controller.state['cases'][-1]
+        assert case['status'] == 'PASS' and case['kind'] == 'cancel-read-local'
+        assert case['cancel_ui_seconds'] == .4 and case['after'] == actual
+        assert operations.count('cancel_read_local') == 1 and operations.count('key') == 1
+    assert controller.state['uncertain_action'] is None
+
+
 def test_client_commands_are_fixed_no_shell_or_flash():
     for style in ('factory', 'iceman'):
         args = station.client_args(dict(path='client with spaces.exe', style=style), 'COM9', 'hw version')

@@ -95,6 +95,24 @@ change still refuses input; there is no automatic retry or relaxed fallback.
 * Repeat after returning to the selected type. A failed/missing response, wrong
   UID, zero/truncated/wrong dump or stale file cannot pass.
 
+For a phase shorter than the SSH round trip, use
+`cancel-read-local --fixture /private/card.json` explicitly. One bounded device
+helper keeps a Tk observer open, sends guarded OK, waits at most 15 seconds for
+the enrolled busy phase, rechecks that phase, sends guarded PWR and requires
+return within five seconds. The recorded `cancel_ui_seconds` includes the final
+guard, durable journal writes, input queuing and return observation on the device;
+it excludes SSH transport. It is a separate timing boundary from `cancel-read`,
+whose existing network-inclusive behavior is unchanged. Neither mode proves the
+active RF command or worst-case cancellation latency.
+
+The local sequence retains the device lease, 30-second helper alarm and durable
+intent before each input. Reusing its action ID cannot send another key. Failure,
+malformed results or lost replies leave the host action uncertain and prevent
+automatic retry. After confirmed cancellation, the host still requires unchanged
+dump inventory and a complete fresh read matching the independently enrolled
+reference. A screen phase change is a failed test attempt, never a reason to
+relax the guard. Raw expected/observed screens remain in private action evidence.
+
 Missing card fixtures are **not run**, not passes. Use the ordinary Classic 1K,
 EM410x and supplied Ultralight-compatible tag first. ICS Decoder is unavailable;
 its USB/accessory tests remain blocked. No writes to source cards are authorized
