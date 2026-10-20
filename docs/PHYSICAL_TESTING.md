@@ -6,10 +6,12 @@ button events, known-card read/repeat/cancel checks, and a resumable PC-mode
 handover. It never installs an IPK, writes a badge or flashes PM3. Run it locally,
 not on a contributor's PR runner. Profiles and evidence are private lab data.
 
-The maintained station has completed a Classic reference read and one supervised
-Windows PC-mode round trip on the recorded candidates. Its cancellation command
-has not yet completed physical acceptance. See the dated, configuration-specific
-[physical acceptance record](PHYSICAL_ACCEPTANCE_20261019.md); calibrate a new
+The maintained station has completed a Classic reference read, one supervised
+Windows PC-mode round trip, and two device-local cancellation/reference-reread
+cases on the recorded candidates. Network-inclusive cancellation remains a
+separate failed timing attempt. See the dated, configuration-specific
+[PC-mode record](PHYSICAL_ACCEPTANCE_20261019.md) and
+[local cancellation acceptance](PHYSICAL_ACCEPTANCE_20261020.md); calibrate a new
 station's screen strings, USB descriptors and companion-client output independently.
 Neither this controller nor QEMU certifies RF behavior for every card family.
 

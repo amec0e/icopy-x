@@ -1,5 +1,9 @@
 # Physical acceptance: 19 October 2026
 
+The [20 October follow-up](PHYSICAL_ACCEPTANCE_20261020.md) records explicit
+recovery of the battery-interrupted session and later local cancellation
+acceptance. The historical outcomes below are preserved.
+
 One iCopy-XS passed Classic 1K read/exit/re-entry checks and a complete supervised
 Windows PC-mode round trip. These results apply to source
 `7aef74038a96235df645cc58aefabfa3b0fb4fd4`, application-equivalent to main
