@@ -185,6 +185,10 @@ def verify_read(before, after, fixture, observed):
         raise ValueError('Card dump differs from independently enrolled fixture')
 
 
+class ScreenGuardRefused(ValueError):
+    """The device durably recorded that its final guard prevented input."""
+
+
 class Station:
     def __init__(self, directory, profile, transport=None):
         self.directory = directory
@@ -231,6 +235,12 @@ class Station:
         self.store()
         result = self.call('key', key=key, expected=expected, action_id=action)
         save(self.directory / ('action-' + action + '.json'), result)
+        if result.get('status') == 'REFUSED':
+            self.state['uncertain_action'] = None
+            self.store()
+            raise ScreenGuardRefused('Unexpected screen; no key sent; see action-' + action + '.json')
+        if result.get('status') != 'QUEUED':
+            raise RuntimeError('Unrecognized input acknowledgement; action remains uncertain')
         self.state['uncertain_action'] = None
         self.store()
 
@@ -281,7 +291,8 @@ class Station:
             if self.state['phase'] == 'RETURNED':
                 self.state['return_read'] = case_id
         except Exception as error:
-            case.update(status='FAIL' if isinstance(error, ValueError) else 'HARNESS_ERROR', error=str(error))
+            case.update(status='FAIL' if isinstance(error, ValueError) and
+                        not isinstance(error, ScreenGuardRefused) else 'HARNESS_ERROR', error=str(error))
             raise
         finally:
             self.store()
