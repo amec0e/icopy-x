@@ -4,6 +4,7 @@ No application hooks and no raw UART writes. A short key is inserted into the
 existing HMI input queue. The durable action record prevents blind replay.
 """
 import base64
+from contextlib import contextmanager
 import fcntl
 import hashlib
 import json
@@ -16,7 +17,7 @@ import sys
 import termios
 import time
 
-from screen import require_screen
+from screen import require_screen, screen_matches
 
 ROOT = Path('/home/pi/icopy-validation')  # root filesystem survives USB handover
 LIVE = Path('/home/pi/ipk_app_main')
@@ -69,7 +70,8 @@ def identity():
             'service': command(['systemctl', 'is-active', 'icopy'])}
 
 
-def texts():
+@contextmanager
+def text_observer():
     import tkinter as tk
     root = tk.Tk(screenName=':0')
     root.withdraw()
@@ -91,10 +93,17 @@ def texts():
         }
         return $result
         '''
-        return list(root.tk.splitlist(root.tk.call(
-            'send', 'tk', root.tk.call('list', 'apply', ('', script)))))
+        def read_texts():
+            return list(root.tk.splitlist(root.tk.call(
+                'send', 'tk', root.tk.call('list', 'apply', ('', script)))))
+        yield read_texts
     finally:
         root.destroy()
+
+
+def texts():
+    with text_observer() as observe:
+        return observe()
 
 
 def inject(key):
@@ -126,6 +135,66 @@ def press(session, request):
     inject(request['key'])
     # This acknowledges input queuing, not application processing.
     record['status'] = 'QUEUED'
+    atomic_json(path, record)
+    return record
+
+
+def cancel_read_local(session, request):
+    """One bounded, journaled Read/cancel sequence; never restarts the read."""
+    action = request['action_id']
+    if not re.fullmatch('[0-9a-f]{32}', action):
+        raise ValueError('Invalid action')
+    path = session / (action + '.json')
+    if path.exists():
+        raise ValueError('Action already attempted; observe, do not replay')
+    start, busy = request['start_texts'], request['busy_texts']
+    screen_matches(start, [])
+    screen_matches(busy, [])
+    record = dict(request, status='INTENT', time=time.time())
+    atomic_json(path, record)
+
+    def persist(stage):
+        record['stage'] = stage
+        atomic_json(path, record)
+
+    def wait_screen(observe, expected, deadline):
+        while time.monotonic() < deadline:
+            observed = observe()
+            record['last_texts'] = observed
+            if time.monotonic() >= deadline:
+                break
+            if any('read failed' in text.lower() for text in observed):
+                raise ValueError('Device reported Read Failed')
+            if screen_matches(expected, observed):
+                return observed
+            time.sleep(.025)
+        raise TimeoutError('Device-local UI deadline')
+
+    try:
+        with text_observer() as observe:
+            record['start_before'] = observe()
+            require_screen(start, record['start_before'])
+            persist('START_INTENT')
+            inject('OK')
+            persist('READ_QUEUED')
+            record['busy_observed'] = wait_screen(observe, busy, time.monotonic() + 15)
+            # Includes final guard, journal fsync, injection and UI observation.
+            cancel_started = time.monotonic()
+            record['cancel_before'] = observe()
+            require_screen(busy, record['cancel_before'])
+            persist('CANCEL_INTENT')
+            if time.monotonic() >= cancel_started + 5:
+                raise TimeoutError('Device-local UI deadline before input')
+            inject('PWR')
+            persist('CANCEL_QUEUED')
+            record['returned_texts'] = wait_screen(observe, start, cancel_started + 5)
+            record['cancel_ui_seconds'] = time.monotonic() - cancel_started
+            if record['cancel_ui_seconds'] >= 5:
+                raise TimeoutError('Device-local UI deadline')
+            record['status'] = 'CANCELLED'
+    except Exception as error:
+        record.update(status='HARNESS_ERROR', error_type=type(error).__name__, error=str(error))
+    # Lost replies or failure to persist still leave the host action uncertain.
     atomic_json(path, record)
     return record
 
@@ -192,6 +261,8 @@ def handle(request):
                 result['frame'] = base64.b64encode(frame).decode('ascii')
         elif operation == 'key':
             result = press(session, request)
+        elif operation == 'cancel_read_local':
+            result = cancel_read_local(session, request)
         elif operation == 'dumps':
             result = dumps()
         elif operation in ('prepare_pc', 'collect'):

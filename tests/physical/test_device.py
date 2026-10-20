@@ -1,6 +1,7 @@
 """Linux device-helper contracts; never touches real /dev, SSH or application."""
 import importlib.util
 import json
+from contextlib import contextmanager
 from pathlib import Path
 import sys
 
@@ -108,3 +109,108 @@ def test_numeric_progress_guard_rechecks_before_input(device, monkeypatch, tmp_p
         result = device.press(tmp_path, request)
         assert result['status'] == 'REFUSED' and result['before'] == observed
         assert sent == []
+
+
+@pytest.fixture
+def local_cancel(device, monkeypatch, tmp_path):
+    clock = [0.0]
+    sent = []
+    screens = [['Selected Classic'], ['ChkDIC...0/32keys'],
+               ['ChkDIC...7/32keys'], ['Selected Classic']]
+    request = dict(action_id='b' * 32, start_texts=['Selected Classic'],
+                   busy_texts=[{'template': 'ChkDIC...{n}/32keys'}])
+    @contextmanager
+    def observer():
+        yield lambda: screens.pop(0) if len(screens) > 1 else screens[0]
+    monkeypatch.setattr(device, 'text_observer', observer)
+    monkeypatch.setattr(device.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(device.time, 'sleep', lambda delay: clock.__setitem__(0, clock[0] + delay))
+    monkeypatch.setattr(device, 'inject', sent.append)
+    return request, screens, clock, sent
+
+
+def test_local_cancel_has_fresh_guard_durable_intents_and_no_replay(device, local_cancel, monkeypatch, tmp_path):
+    request, screens, clock, sent = local_cancel
+    path = tmp_path / (request['action_id'] + '.json')
+    def inject(key):
+        saved = json.loads(path.read_text())
+        assert saved['stage'] == ('START_INTENT' if key == 'OK' else 'CANCEL_INTENT')
+        sent.append(key)
+    monkeypatch.setattr(device, 'inject', inject)
+    result = device.cancel_read_local(tmp_path, request)
+    assert result['status'] == 'CANCELLED'
+    assert result['cancel_before'] == ['ChkDIC...7/32keys']
+    assert sent == ['OK', 'PWR']
+    assert json.loads(path.read_text()) == result
+    with pytest.raises(ValueError, match='already attempted'):
+        device.cancel_read_local(tmp_path, request)
+    assert sent == ['OK', 'PWR']
+
+
+@pytest.mark.parametrize('stage', ['initial', 'final'])
+def test_local_cancel_refuses_wrong_screen_without_unintended_input(device, local_cancel, tmp_path, stage):
+    request, screens, clock, sent = local_cancel
+    screens[0 if stage == 'initial' else 2] = ['Successful!', 'File saved']
+    result = device.cancel_read_local(tmp_path, request)
+    assert result['status'] == 'HARNESS_ERROR'
+    assert result['error_type'] == 'ValueError'
+    assert sent == ([] if stage == 'initial' else ['OK'])
+    assert result['start_before' if stage == 'initial' else 'cancel_before'] == ['Successful!', 'File saved']
+
+
+@pytest.mark.parametrize('stage', ['busy', 'return'])
+def test_local_cancel_deadlines_do_not_restart_or_repeat_input(device, local_cancel, tmp_path, stage):
+    request, screens, clock, sent = local_cancel
+    if stage == 'busy':
+        screens[:] = [['Selected Classic'], ['Scanning...']]
+    else:
+        screens[-1] = ['ChkDIC...8/32keys']
+    result = device.cancel_read_local(tmp_path, request)
+    assert result['status'] == 'HARNESS_ERROR' and result['error_type'] == 'TimeoutError'
+    assert sent == (['OK'] if stage == 'busy' else ['OK', 'PWR'])
+    assert (15 <= clock[0] < 15.1) if stage == 'busy' else (5 <= clock[0] < 5.1)
+
+
+def test_local_cancel_slow_final_guard_prevents_late_input(device, local_cancel, monkeypatch, tmp_path):
+    request, screens, clock, sent = local_cancel
+    @contextmanager
+    def slow_observer():
+        def observe():
+            value = screens.pop(0)
+            if value == ['ChkDIC...7/32keys']:
+                clock[0] += 6
+            return value
+        yield observe
+    monkeypatch.setattr(device, 'text_observer', slow_observer)
+    result = device.cancel_read_local(tmp_path, request)
+    assert result['status'] == 'HARNESS_ERROR' and result['error_type'] == 'TimeoutError'
+    assert sent == ['OK']
+
+
+def test_local_cancel_late_success_is_not_a_pass(device, local_cancel, monkeypatch, tmp_path):
+    request, screens, clock, sent = local_cancel
+    @contextmanager
+    def slow_observer():
+        def observe():
+            value = screens.pop(0)
+            if len(screens) == 0:
+                clock[0] += 6
+            return value
+        yield observe
+    monkeypatch.setattr(device, 'text_observer', slow_observer)
+    result = device.cancel_read_local(tmp_path, request)
+    assert result['status'] == 'HARNESS_ERROR' and result['error_type'] == 'TimeoutError'
+    assert sent == ['OK', 'PWR']
+
+
+def test_local_cancel_partial_injection_cannot_be_replayed(device, local_cancel, monkeypatch, tmp_path):
+    request, screens, clock, sent = local_cancel
+    def partial(key):
+        sent.append(key)
+        raise OSError('partial injection')
+    monkeypatch.setattr(device, 'inject', partial)
+    result = device.cancel_read_local(tmp_path, request)
+    assert result['status'] == 'HARNESS_ERROR' and result['stage'] == 'START_INTENT'
+    with pytest.raises(ValueError, match='already attempted'):
+        device.cancel_read_local(tmp_path, request)
+    assert sent == ['OK']

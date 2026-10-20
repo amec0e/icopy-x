@@ -4,6 +4,7 @@ import base64
 import hashlib
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -260,24 +261,54 @@ class Station:
             time.sleep(.25)
         raise TimeoutError('UI deadline')
 
-    def read_card(self, fixture, cancel=False):
+    def cancel_local(self, fixture):
+        if self.state.get('uncertain_action'):
+            raise ValueError('Uncertain action; observe and explicitly acknowledge before continuing')
+        action = uuid.uuid4().hex
+        self.state['uncertain_action'] = action
+        self.store()
+        result = self.call('cancel_read_local', action_id=action,
+                           start_texts=fixture['start_texts'], busy_texts=fixture['busy_texts'])
+        save(self.directory / ('action-' + action + '.json'), result)
+        elapsed = result.get('cancel_ui_seconds')
+        if (result.get('action_id') != action or result.get('status') != 'CANCELLED' or
+                not isinstance(elapsed, (int, float)) or isinstance(elapsed, bool) or
+                not math.isfinite(elapsed) or not 0 <= elapsed < 5 or
+                not screen_matches(fixture['busy_texts'], result.get('busy_observed', [])) or
+                not screen_matches(fixture['busy_texts'], result.get('cancel_before', [])) or
+                not screen_matches(fixture['start_texts'], result.get('returned_texts', []))):
+            raise RuntimeError('Device-local cancellation unconfirmed; action remains uncertain; see action-' +
+                               action + '.json')
+        self.state['uncertain_action'] = None
+        self.store()
+        return elapsed
+
+    def read_card(self, fixture, cancel=False, local_cancel=False):
         if self.state['phase'] not in ('SSH', 'RETURNED'):
             raise ValueError('Read requires SSH phase')
-        for field in ('start_texts', 'success_texts') + (('busy_texts',) if cancel else ()):
+        if cancel and local_cancel:
+            raise ValueError('Choose one cancellation timing mode')
+        for field in ('start_texts', 'success_texts') + (('busy_texts',) if cancel or local_cancel else ()):
             screen_matches(fixture[field], [])  # Validate before sending any key.
         case_id = uuid.uuid4().hex
-        case = dict(id=case_id, kind='cancel-read' if cancel else 'read', status='INCOMPLETE')
+        case = dict(id=case_id, kind='cancel-read-local' if local_cancel else
+                    'cancel-read' if cancel else 'read', status='INCOMPLETE')
         self.state['cases'].append(case)
         self.store()
         try:
             self.observe(frame=True)
             before = self.call('dumps')
-            self.key('OK', fixture['start_texts'])
+            if local_cancel:
+                case['cancel_ui_seconds'] = self.cancel_local(fixture)
+                case['timing_boundary'] = 'device-local final guard through return observation'
+            else:
+                self.key('OK', fixture['start_texts'])
             if cancel:
                 self.wait(fixture['busy_texts'], 15)
                 cancel_started = time.monotonic()
                 self.key('PWR', fixture['busy_texts'])
                 self.wait(fixture['start_texts'], 5 - (time.monotonic() - cancel_started))
+            if cancel or local_cancel:
                 cancelled = self.call('dumps')
                 if cancelled != before:
                     raise ValueError('Cancellation changed the dump inventory')
@@ -364,6 +395,7 @@ def main():
     parser.add_argument('--profile', type=Path, required=True)
     parser.add_argument('--session', type=Path, required=True)
     parser.add_argument('operation', choices=('inspect', 'begin', 'resume-begin', 'observe', 'key', 'read', 'cancel-read',
+        'cancel-read-local',
         'pc-start', 'pc-usb', 'pc-return', 'acknowledge', 'finish', 'report'))
     parser.add_argument('--fixture', type=Path)
     parser.add_argument('--key', choices=('UP', 'DOWN', 'LEFT', 'RIGHT', 'OK', 'M1', 'M2', 'PWR', 'ALL'))
@@ -394,10 +426,11 @@ def main():
                 parser.error('key requires SSH phase, --key and --expect')
             station.observe()
             station.key(args.key, args.expect)
-        elif args.operation in ('read', 'cancel-read'):
+        elif args.operation in ('read', 'cancel-read', 'cancel-read-local'):
             if not args.fixture:
                 parser.error('--fixture is required')
-            station.read_card(read(args.fixture), args.operation == 'cancel-read')
+            station.read_card(read(args.fixture), cancel=args.operation == 'cancel-read',
+                              local_cancel=args.operation == 'cancel-read-local')
         elif args.operation == 'pc-start':
             station.prepare_pc()
         elif args.operation == 'pc-usb':
