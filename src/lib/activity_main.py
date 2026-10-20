@@ -8253,6 +8253,7 @@ class IClassSEActivity(BaseActivity):
         self._state = self.STATE_READING
         self._poll_timer = None
         self._target_poll_timer = None
+        self._target_in_flight = False
         self._toast = None
         self._source_data = None
         self._target_type = None
@@ -8487,6 +8488,9 @@ class IClassSEActivity(BaseActivity):
             pass
 
     def _stop_target_poll(self):
+        if self._target_in_flight:
+            self._cancel_operation()
+            self._target_in_flight = False
         if self._target_poll_timer is not None:
             try:
                 from lib import actstack
@@ -8531,21 +8535,33 @@ class IClassSEActivity(BaseActivity):
 
     def _poll_target(self):
         self._target_poll_timer = None
-        # Guard: stop if destroyed or not waiting for blank
-        if self._state == self.STATE_DESTROYED:
+        if self._state != self.STATE_WAIT_BLANK or self._target_in_flight:
             return
+        self._target_in_flight = True
+        self.setRightButton('Write', active=False)
+        self._start_operation(self._detect_target_bg, self._target_poll_completed)
+
+    def _detect_target_bg(self, cancelled):
+        import executor
+        import ics_decoder
+        try:
+            # Retain the response/cache through all probe commands and parsing.
+            # Cancellation unwinds before another key or LF fallback is sent.
+            with executor.pm3_operation(cancelled):
+                return ics_decoder.detect_target()
+        except executor.PM3OperationCancelled:
+            return None
+
+    def _target_poll_completed(self, target, error):
+        self._target_in_flight = False
         if self._state != self.STATE_WAIT_BLANK:
             return
+        self._target_type = None if error is not None else target
+        self._on_target_found()
 
-        try:
-            import ics_decoder
-            self._target_type = ics_decoder.detect_target()
-        except Exception:
-            self._target_type = None
-
-        if self._target_type:
-            self._render_wait_blank_state()
-        else:
+    def _on_target_found(self):
+        self._render_wait_blank_state()
+        if not self._target_type:
             self._start_target_poll()
 
     def _write_target_available(self, source, target_type, selected_target_type):
@@ -8554,7 +8570,7 @@ class IClassSEActivity(BaseActivity):
     def _do_write(self):
         """Snapshot the selected credential and start work from the UI thread."""
         import copy
-        if self._state == self.STATE_DESTROYED:
+        if self._state == self.STATE_DESTROYED or self._target_in_flight:
             return
         source = copy.deepcopy(self._source_data)
         selected_target_type = self._target_type
@@ -8688,7 +8704,7 @@ class IClassSEActivity(BaseActivity):
             is_26bit = True
 
         self.setLeftButton(resources.get_str('back'))
-        self.setRightButton('Write')
+        self.setRightButton('Write', active=not self._target_in_flight)
 
         canvas.create_text(
             120, self._Y_STATUS,
@@ -10120,7 +10136,8 @@ class ICSDecoderActivity(IClassSEActivity):
         return False
 
     def _target_write_available(self):
-        return self._capture_supports_target(self._source_data or {}, self._target_type)
+        return (not self._target_in_flight and
+                self._capture_supports_target(self._source_data or {}, self._target_type))
 
     def _write_target_available(self, source, target_type, selected_target_type):
         return (target_type == selected_target_type and
@@ -10145,15 +10162,7 @@ class ICSDecoderActivity(IClassSEActivity):
                                      font=resources.get_font(14), anchor='center',
                                      tags='_ics_prompt')
 
-    def _poll_target(self):
-        self._target_poll_timer = None
-        if self._state != self.STATE_WAIT_BLANK:
-            return
-        try:
-            import ics_decoder
-            self._target_type = ics_decoder.detect_target()
-        except Exception:
-            self._target_type = None
+    def _on_target_found(self):
         self._render_wait_blank_state()
         if not self._target_write_available():
             self._start_target_poll()

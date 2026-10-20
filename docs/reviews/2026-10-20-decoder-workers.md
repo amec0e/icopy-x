@@ -43,7 +43,7 @@ Cancellation cannot undo a hardware call already dispatched; such a call may
 finish, while its late UI result is discarded. No implicit replay or global PM3
 abort was added.
 
-Target polling while waiting for a blank still runs detection synchronously on
-the UI thread. That separate responsiveness issue remains to be assessed.
+The separate [blank-target polling correction](2026-10-20-decoder-target-poll.md)
+subsequently moves detection off Tk with cancellation and PM3 ownership tests.
 Serial close behavior and real accessory read/write/verify acceptance also
 remain physical validation boundaries; no ICS Decoder is currently available.

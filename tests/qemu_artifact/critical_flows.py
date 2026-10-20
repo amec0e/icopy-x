@@ -20,6 +20,7 @@ from recovery_transport import RecoveryTranscript
 import ultralight_cases
 import decoder_menu_case
 import decoder_worker_case
+import decoder_target_case
 
 
 PROFILE = json.loads(Path(__file__).with_name('critical_cases.json').read_text())
@@ -261,6 +262,8 @@ def run(root, output, variant, callback_errors):
                     activity = main
                 elif name == 'decoder_worker_lifecycle':
                     activity, row['decoder_workers'] = decoder_worker_case.run(root, pump)
+                elif name == 'decoder_target_poll':
+                    activity, row['decoder_target'] = decoder_target_case.run(root, pump, firmware)
                 elif mfu:
                     is_auto = name == 'mfu_auto_partial'
                     activity = (actstack.start_activity(activity_main.AutoCopyActivity) if is_auto else
