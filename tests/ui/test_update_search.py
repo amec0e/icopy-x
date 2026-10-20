@@ -8,6 +8,9 @@ silently regress.
 """
 
 import os
+import zipfile
+
+import pytest
 
 import update
 
@@ -39,6 +42,32 @@ def test_search_finds_real_ipk_without_sidecar(tmp_path):
     real = os.path.join(str(tmp_path), "update.ipk")
     _touch(real)
     assert update.search(str(tmp_path)) == real
+
+
+def test_orphaned_older_sidecar_cannot_replace_current_package(tmp_path, monkeypatch):
+    """Issue #10 follow-up: metadata remains after deleting an older IPK."""
+    monkeypatch.setattr(update, '_found_ipk', None)
+    real = tmp_path / 'newest.ipk'
+    with zipfile.ZipFile(real, 'w') as archive:
+        for name in ('app.py', 'lib/version.py', 'main/install.py'):
+            archive.writestr(name, '# Package structure fixture; never installed.\n')
+    (tmp_path / '._newest.ipk').write_bytes(b'AppleDouble metadata')
+    (tmp_path / '._older.ipk').write_bytes(b'Orphaned AppleDouble metadata')
+    assert not (tmp_path / 'older.ipk').exists()
+    assert update.search(str(tmp_path)) == str(real)
+    assert update.checkPkg()
+
+
+def test_only_orphaned_sidecar_clears_previous_package_selection(tmp_path, monkeypatch):
+    monkeypatch.setattr(update, '_found_ipk', None)
+    real = tmp_path / 'older.ipk'
+    real.write_bytes(b'old package')
+    (tmp_path / '._older.ipk').write_bytes(b'Orphaned AppleDouble metadata')
+    assert update.search(str(tmp_path)) == str(real)
+    real.unlink()
+    assert update.search(str(tmp_path)) is None
+    with pytest.raises(RuntimeError, match='No IPK found'):
+        update.checkPkg()
 
 
 def test_is_hidden():
