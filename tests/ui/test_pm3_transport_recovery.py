@@ -123,6 +123,67 @@ def fresh_response(child):
     child.on_command = lambda cmd: child.emit('FRESH ' + cmd + '\nNikola.D: 0\n')
 
 
+@pytest.fixture(params=['original', 'iceman'])
+def iclass_pipeline(pipeline, monkeypatch, request):
+    import iclasswrite
+    import pm3_compat
+    monkeypatch.setattr(pm3_compat, '_current_version', request.param)
+    monkeypatch.setattr(pm3_compat, 'LEGACY_COMPAT', True)
+    monkeypatch.setattr(executor, 'pm3_compat', pm3_compat)
+    monkeypatch.setattr(iclasswrite, 'TIMEOUT', 500)
+    return pipeline + (request.param, iclasswrite)
+
+
+def test_iclass_write_accepts_supported_success_through_real_pipeline(iclass_pipeline):
+    manager, child, family, writer = iclass_pipeline
+    response = ('Wrote block 06 successful' if family == 'original'
+                else 'Wrote block 6 / 0x06 ( ok )')
+    child.on_command = lambda cmd: child.emit('[+] \x1b[32m' + response + '\x1b[0m\nNikola.D: 0\n')
+    assert writer.writeDataBlock(17, 6, '0011223344556677', '2020666666668888') == 0
+    flag = '-b' if family == 'original' else '--blk'
+    assert child.commands == ['hf iclass wrbl ' + flag + ' 6 -d 0011223344556677 -k 2020666666668888']
+    assert not manager._needs_recovery
+
+
+def test_iclass_failed_block_stops_sequence_and_next_command_works(iclass_pipeline):
+    manager, child, family, writer = iclass_pipeline
+    child.on_command = lambda cmd: child.emit('Authentication failed\nNikola.D: 0\n')
+    assert writer.writeDataBlocks(17, {6: '0011223344556677', 7: '8899AABBCCDDEEFF'}) == -1
+    assert len(child.commands) == 1  # Never continue to block 7 after block 6 failed.
+    assert not manager._needs_recovery
+    fresh_response(child)
+    assert executor.startPM3Task('hw version', timeout=500) == 1
+    assert child.commands[-1] == 'hw version'
+    assert len(child.commands) == 2
+
+
+@pytest.mark.parametrize('cancel', [False, True], ids=['timeout', 'cancel'])
+def test_iclass_aborted_write_never_replays_or_advances_blocks(iclass_pipeline, monkeypatch, cancel):
+    manager, child, family, writer = iclass_pipeline
+    monkeypatch.setattr(writer, 'TIMEOUT', 500 if cancel else 25)
+    worker = start(lambda: writer.writeDataBlocks(17, {6: '0011223344556677', 7: '8899AABBCCDDEEFF'}))
+    assert child.sent.wait(2)
+    if cancel:
+        executor.stopPM3Task(wait=False)
+    else:
+        child.emit('UART:: write time-out\n')  # No terminating prompt follows.
+    wait_for(lambda: executor._pipeline_needs_cleanup)
+    assert finish(worker) == [-1]
+    assert len(child.commands) == 1
+    assert not executor.LABEL_PM3_CMD_TASK_RUNNING
+    assert executor.getPrintContent() == ''
+    # The late completion must be drained before a new task may use the port.
+    assert executor.startPM3Task('must-not-run', timeout=100) == -1
+    assert len(child.commands) == 1
+    child.emit('Wrote block 6 / 0x06 ( ok )\nNikola.D: 0\n')
+    wait_for(lambda: not manager._expecting_response)
+    fresh_response(child)
+    assert executor.startPM3Task('hw version', timeout=500) == 1
+    assert 'FRESH hw version' in executor.getPrintContent()
+    assert 'Wrote block' not in executor.getPrintContent()
+    assert len(child.commands) == 2 and child.commands[-1] == 'hw version'
+
+
 def test_timeout_drains_late_reply_without_replay_or_stale_cache(pipeline):
     manager, child = pipeline
     worker = start(lambda: executor.startPM3Task('write-once', timeout=20))
