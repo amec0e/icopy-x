@@ -478,6 +478,11 @@ def publish(api, environ, directory):
         final = dict(saved, state=status)
         state['integration_pending'] = bundle['base'] != record['base']
     state = dashboard.remember(state, final)
+    if final['state'] == 'STALE' and current.get('state') == 'open' and not current.get('draft'):
+        # Keep the old paid reservation while making the visible checklist
+        # describe the actual new revision, not the obsolete reviewed head.
+        state = dashboard.remember(state, dict(identity(current), state='DEFERRED',
+                                   reserved_at=None, run_id=record['run_id']))
     observe_ci(api, state, current)
     if bundle['base'] != record['base']:
         state['integration_pending'] = True

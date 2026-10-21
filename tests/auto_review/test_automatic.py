@@ -204,7 +204,8 @@ class AutomaticTests(unittest.TestCase):
         self.assertEqual(auto.run_review(self.api, self.env, self.directory,
                          lambda *a, **kw: self.fail('Paid call against obsolete base')), 2)
         auto.publish(self.api, self.env, self.directory)
-        self.assertEqual(auto.marker(self.api.comments[0])['state'], 'STALE')
+        self.assertEqual(auto.marker(self.api.comments[0])['state'], 'DEFERRED')
+        self.assertEqual(auto.records(self.api.comments[0])[0]['state'], 'STALE')
 
     def test_collection_gaps_return_explanation_without_paid_reservation(self):
         self.bundle['gaps'] = [{'path': 'binary', 'reason': 'binary payload'}]
@@ -273,7 +274,9 @@ class AutomaticTests(unittest.TestCase):
     def test_stale_result_does_not_publish_findings_against_new_head(self):
         self.select(); self.save_result(); self.pr['head']['sha'] = 'd' * 40
         auto.publish(self.api, self.env, self.directory)
-        self.assertEqual(auto.marker(self.api.comments[0])['state'], 'STALE')
+        self.assertEqual(auto.marker(self.api.comments[0])['state'], 'DEFERRED')
+        self.assertEqual(auto.marker(self.api.comments[0])['head'], 'd' * 40)
+        self.assertEqual(auto.records(self.api.comments[0])[0]['state'], 'STALE')
         self.assertNotIn('Wrong result.', self.api.comments[0]['body'])
 
     def test_missing_result_still_posts_honest_incomplete_outcome(self):
