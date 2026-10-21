@@ -1,5 +1,5 @@
 {
-  "version": "critical-v7",
+  "version": "critical-v8",
   "cases": {
     "no_tag_rescan": "Six-stage no-card scan completes; M2 starts one new scan and returns to no-tag.",
     "collision_refuses_reader": "A synthetic collision result displays the warning and never starts a Reader.",
@@ -11,6 +11,7 @@
     "decoder_absent": "Real discovery with empty serial inventory reports absent decoder and permits exit.",
     "decoder_menu_hotplug": "Real discovery and Tk hide an absent/non-decoder accessory, show it after Who/ISE, preserve Settings focus on hotplug/unplug, and never open the internal PM3.",
     "decoder_worker_lifecycle": "Both decoder activities read, write and verify with real threads and Tk, held UI delivery and durable thread-affinity checks; exit during target detection suppresses the next write.",
+    "decoder_target_poll": "Real HF/LF probes run off Tk for both decoder activities; Back remains responsive, cancels fallback commands and preserves response ownership through immediate re-entry.",
     "reader_success": "Real scan, Reader, LF protocol/parser and dump saving reach read success with the expected identity.",
     "reader_queued_exit": "A real Reader finishes without waiting for Tk; PWR before UI delivery discards its queued completion.",
     "reader_cancel_reenter": "PWR during a real Reader's held response exits without a stale result; after worker completion, re-entry reads successfully.",
