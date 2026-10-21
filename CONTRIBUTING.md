@@ -33,7 +33,11 @@ Some users prefer "no-flash", and some prefer "flash". While these two goals may
 - **Do NOT patch upstream code** - any PRs that patch upstream proxmark code will be immediately rejected. The proxmark project has build-flags for iCopy-X. If you've genuinely found a bug in the proxmark code that requires a specific branch for the iCopy-X - it needs to go into the proxmark project - where you'll also need to have founded justification.
 - **Respect licensing** - Preserve required legal notices; ensure that your code respects licenses. If you're porting code from other projects, please understand the license implications. 
 - **Use the support provided by review.** CI runs host tests, builds packages and
-  IPKs on a fully emulated device - you do not need our private image or server. An automated PR review script will perform analysis on your contribution - and provide rapid feedback. This is AI powered - it is intended as a guide to remove some complexity for you, and give you immediate feedback. A human maintainer will handle the final decision.
+  IPKs on a fully emulated device - you do not need our private image or server.
+  Astra maintains one checklist of required fixes, passed checks, assessments
+  and optional suggestions. Push corrections to the same PR; later reviews
+  recheck the list and show your progress. **GO** means ready for maintainer
+  review; **NO-GO** explains what remains. A human maintainer makes the final decision.
 
 ## You're making this too complicated
 This project has stringent quality requirements: this is not to discourage contributions. It comes from two reasons:

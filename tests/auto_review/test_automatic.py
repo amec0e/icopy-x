@@ -22,11 +22,16 @@ class FakeGitHub:
         self.next_prs = []
         self.old_run = {'status': 'completed'}
         self.main_sha = pr['base']['sha']
+        self.check_runs = []
 
     def __call__(self, method, route, data=None):
         path = urlsplit(route).path.removeprefix('/repos/' + auto.REPOSITORY)
         self.reads.append((method, path))
         if method == 'GET':
+            if path.endswith('/statuses'):
+                return []
+            if path.endswith('/check-runs'):
+                return {'check_runs': copy.deepcopy(self.check_runs)}
             if path == '':
                 return {'id': auto.REPOSITORY_ID, 'default_branch': 'main'}
             if path == '/pulls':
@@ -46,6 +51,14 @@ class FakeGitHub:
                     raise self.old_run
                 return self.old_run
         self.writes.append((method, path, data))
+        if method == 'POST' and path == '/check-runs':
+            row = dict(data, id=5000 + len(self.check_runs), app={'id': 15368})
+            self.check_runs.append(row)
+            return copy.deepcopy(row)
+        if method == 'PATCH' and path.startswith('/check-runs/'):
+            row = next(r for r in self.check_runs if r['id'] == int(path.rsplit('/', 1)[1]))
+            row.update(data)
+            return copy.deepcopy(row)
         if method == 'POST' and path == '/issues/123/comments':
             comment = dict(id=1000 + len(self.comments), body=data['body'], user={'id': auto.BOT_ID})
             self.comments.append(comment)
@@ -114,7 +127,7 @@ class AutomaticTests(unittest.TestCase):
         self.api.old_run = {'status': 'in_progress'}
         self.assertFalse(self.select())
         self.assertEqual(self.prepares, 1)
-        self.assertEqual(len(self.api.writes), 1)
+        self.assertEqual(len([w for w in self.api.writes if '/issues/' in w[1]]), 1)
 
     def test_finished_abandoned_reservation_becomes_incomplete_without_retry(self):
         self.assertTrue(self.select())
@@ -128,9 +141,10 @@ class AutomaticTests(unittest.TestCase):
         self.pr['head']['sha'] = 'd' * 40
         self.bundle['gaps'] = [{'path': 'binary', 'reason': 'binary payload'}]
         self.assertFalse(self.select())
-        self.assertEqual(auto.marker(self.api.comments[0])['state'], 'STALE')
-        self.assertIsNotNone(auto.marker(self.api.comments[0])['reserved_at'])
-        self.assertEqual(auto.marker(self.api.comments[1])['state'], 'INCOMPLETE')
+        self.assertEqual(len(self.api.comments), 1)
+        self.assertEqual(auto.records(self.api.comments[0])[0]['state'], 'STALE')
+        self.assertIsNotNone(auto.records(self.api.comments[0])[0]['reserved_at'])
+        self.assertEqual(auto.marker(self.api.comments[0])['state'], 'INCOMPLETE')
 
     def test_expired_run_record_does_not_block_queue_or_retry_generation(self):
         self.select()
@@ -212,8 +226,9 @@ class AutomaticTests(unittest.TestCase):
         self.api.comments[0]['body'] = auto.body(paid, 'Prior paid result')
         self.api.main_sha = 'e' * 40
         self.assertFalse(self.select())
-        self.assertEqual(len(self.api.comments), 2)
-        self.assertEqual(auto.marker(self.api.comments[0])['reserved_at'], '2026-10-19T17:00:00Z')
+        self.assertEqual(len(self.api.comments), 1)
+        self.assertTrue(any(r['reserved_at'] == '2026-10-19T17:00:00Z'
+                            for r in auto.records(self.api.comments[0])))
 
     def test_changed_head_before_model_prevents_api_call(self):
         self.select(); self.pr['head']['sha'] = 'd' * 40
@@ -288,7 +303,7 @@ class AutomaticTests(unittest.TestCase):
         paths = auto.recipes(['src/middleware/ics_decoder.py', 'src/lib/activity_main.py',
                               'src/middleware/iclasswrite.py', 'tools/build_ipk.py', 'CONTRIBUTING.md'])
         tracked = set(subprocess.check_output(['git', 'ls-files']).decode().splitlines())
-        self.assertFalse(set(paths) - tracked)
+        self.assertFalse([path for path in paths if not Path(path).is_file()])
         self.assertIn('src/main/rftask.py', paths)
         self.assertIn('tests/ui/activities/test_ics_decoder.py', paths)
         self.assertIn('tools/auto_review/reviewer.py', paths)

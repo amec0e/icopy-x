@@ -61,7 +61,24 @@ def accounting(report):
                 reported_tokens=totals)
 
 
-def render(report, bundle=None):
+def validated(report, bundle=None):
+    status = report.get('status', 'INCOMPLETE')
+    proposal = report.get('review')
+    if proposal is None:
+        return 'INCOMPLETE', None, 'No source-validated advisory is available.'
+    try:
+        if (bundle is None or report.get('snapshot_sha256') != digest(bundle) or
+                report.get('base') != bundle['base'] or report.get('head') != bundle['head']):
+            raise ValueError('Snapshot identity mismatch')
+        validate(proposal, bundle)
+    except (ValueError, KeyError, TypeError, AttributeError, IndexError):
+        return 'INCOMPLETE', None, 'Saved review failed source validation; no new findings displayed.'
+    if status != 'ADVISORY_COMPLETE' or report.get('error') or proposal['completion'] != 'complete':
+        status = 'INCOMPLETE'
+    return status, proposal, None
+
+
+def render_evidence(report, bundle=None):
     status = report.get('status', 'INCOMPLETE')
     if status not in ('ADVISORY_COMPLETE', 'PREPARED', 'INCOMPLETE'):
         status = 'INCOMPLETE'
@@ -135,6 +152,42 @@ def render(report, bundle=None):
                 lines.append('None listed by the model.\n')
     if report.get('gaps'):
         lines.append('## Collector gaps\n' + block(json.dumps(report['gaps'], indent=2)))
+    return '\n'.join(lines)
+
+
+def render(saved, bundle=None):
+    """Readable artifact front page, with the full technical audit folded away."""
+    from .dashboard import source, text
+    status, proposal, error = validated(saved, bundle)
+    lines = ['# Astra source review', '']
+    blockers = [f for f in proposal['findings'] if f['severity'] != 'P3'] if proposal else []
+    title = ('Changes required' if blockers else 'Assessment required' if status != 'ADVISORY_COMPLETE'
+             else 'Source review complete — see the PR checklist for CI and readiness')
+    lines += ['**' + title + '**', '', '### Blocking issues', '']
+    if proposal:
+        lines += [text(proposal['summary']), '']
+        for finding in blockers:
+            lines.append('- [ ] **' + finding['severity'] + '** — ' + text(finding['requested_change']) +
+                         ' (' + source(finding, saved['base'], saved['head']) + '). ' + text(finding['impact']))
+    else:
+        lines.append(text(error))
+    if proposal and not blockers:
+        lines.append('No confirmed code blockers returned; this is not a correctness guarantee.')
+    lines += ['', '### Passing source assessments', '']
+    passed = [a for a in proposal.get('assessments', []) if a['status'] == 'pass'] if proposal else []
+    lines += ['- [x] **' + text(a['area']) + '** — ' + text(a['reason']) for a in passed]
+    if not passed:
+        lines.append('None established. A source review does not execute tests.')
+    lines += ['', '### Assessments and suggestions', '']
+    if proposal:
+        lines += ['- [ ] ' + text(a['reason']) for a in proposal.get('assessments', [])
+                  if a['status'] == 'needs_attention']
+        lines += ['- [ ] Device evidence: ' + text(value) for value in proposal['required_device_checks']]
+        lines += ['- [ ] Optional: ' + text(f['requested_change']) for f in proposal['findings'] if f['severity'] == 'P3']
+        if status != 'ADVISORY_COMPLETE':
+            lines += ['- [ ] ' + text(value) for value in proposal['limitations']]
+    lines += ['', '<details>', '<summary>Full source evidence, coverage and execution accounting</summary>', '',
+              render_evidence(saved, bundle), '', '</details>', '']
     return '\n'.join(lines)
 
 
