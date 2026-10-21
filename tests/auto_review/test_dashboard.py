@@ -125,6 +125,18 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(len(state['records']), 2)
         self.assertEqual(dashboard.readiness(state)[0], 'NO-GO')
 
+    def test_verbose_result_compacts_prose_without_erasing_actions_or_cost_ledger(self):
+        self.proposal['findings'] = [dict(self.finding(), trigger=str(i) + ' Trigger. ' * 700,
+            impact='Impact. ' * 800, requested_change='Fix. ' * 1500) for i in range(8)]
+        state = self.accept()
+        rendered = dashboard.body(state)
+        restored = dashboard.load(dict(body=rendered, user={'id': auto.BOT_ID}), auto.BOT_ID)
+        self.assertLess(len(rendered.encode()), 60_000)
+        self.assertEqual(len(restored['items']), 8)
+        self.assertEqual(restored['records'], state['records'])
+        self.assertEqual(dashboard.readiness(restored)[0], 'NO-GO')
+        self.assertIn('Display shortened', rendered)
+
 
 class ChecklistQueueTests(unittest.TestCase):
     def setUp(self):

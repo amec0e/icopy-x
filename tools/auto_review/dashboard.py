@@ -226,8 +226,33 @@ def render(state):
 def body(state):
     # JSON is hidden but durable. Escape '<' so even malicious source cannot
     # close the HTML comment. Never truncate reservations or silently lose work.
-    encoded = json.dumps(state, sort_keys=True, separators=(',', ':'), ensure_ascii=True).replace('<', '\\u003c')
-    result = PREFIX + encoded + END + '\n' + render(state)
+    def encode(value):
+        encoded = json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).replace('<', '\\u003c')
+        return PREFIX + encoded + END + '\n' + render(value)
+    result = encode(state)
+    if len(result.encode('utf-8')) > 60_000:
+        state = deepcopy(state)
+        def short(value):
+            return value if len(value) <= 200 else value[:200] + '… [full detail in the review artifact]'
+        for item in state['items']:
+            for key in ('trigger', 'impact', 'requested_change', 'quote'):
+                item['finding'][key] = short(item['finding'][key])
+            if 'resolution' in item:
+                item['resolution'] = short(item['resolution'])
+            for citation in item.get('evidence', []):
+                citation['quote'] = short(citation['quote'])
+        review = state.get('review')
+        if review:
+            review['overflow'] = True
+            review['summary'] = short(review['summary'])
+            for row in review['files'] + review['assessments']:
+                row['reason'] = short(row['reason'])
+                for citation in row.get('evidence', []):
+                    citation['quote'] = short(citation['quote'])
+            for field in ('limitations', 'required_device_checks'):
+                review[field] = [short(value) for value in review[field]]
+        state['notice'] = 'Display shortened to fit GitHub. All action IDs and reservations remain; full details are in the review artifact.'
+        result = encode(state)
     if len(result.encode('utf-8')) > 60_000:
         raise ValueError('Dashboard exceeds comment limit; retain prior ledger and inspect artifacts')
     return result
