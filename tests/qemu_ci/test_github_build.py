@@ -46,6 +46,54 @@ def test_current_head_required_and_missing_fork_association_resolved(run):
         build.current_pulls(run, fetch)
 
 
+def test_fork_missing_both_associations_uses_paginated_live_inventory(run):
+    run['pull_requests'] = []
+    pull = dict(number=119, state='open', base=dict(ref='main', repo=dict(full_name=build.REPOSITORY)),
+                head=dict(sha=run['head_sha']))
+    calls = []
+    def fetch(path):
+        calls.append(path)
+        if path.startswith('commits/'):
+            return []
+        if path.endswith('page=1'):
+            return [dict(number=n + 1, head={'sha': 'c' * 40}) for n in range(100)]
+        if path.endswith('page=2'):
+            return [pull]
+        assert path == 'pulls/119'
+        return pull
+    assert build.current_pulls(run, fetch) == [119]
+    assert calls[-1] == 'pulls/119'
+    assert len(calls) == 4
+    assert run['pull_requests'] == []
+
+
+@pytest.mark.parametrize('change', [dict(state='closed'), dict(head={'sha': 'b' * 40}),
+    dict(base=dict(ref='other', repo=dict(full_name=build.REPOSITORY))),
+    dict(base=dict(ref='main', repo=dict(full_name='someone/else')))])
+def test_inventory_match_is_rechecked_before_acceptance(run, change):
+    run['pull_requests'] = []
+    pull = dict(number=119, state='open', base=dict(ref='main', repo=dict(full_name=build.REPOSITORY)),
+                head=dict(sha=run['head_sha']))
+    def fetch(path):
+        if path.startswith('commits/'):
+            return []
+        if path.startswith('pulls?'):
+            return [pull]
+        return dict(pull, **change)
+    with pytest.raises(ValueError, match='current open PR head'):
+        build.current_pulls(run, fetch)
+
+
+def test_open_pr_inventory_cannot_overflow_or_return_an_implicit_pass(run):
+    run['pull_requests'] = []
+    def overflow(path):
+        return [] if path.startswith('commits/') else [dict(head={'sha': 'c' * 40})] * 100
+    with pytest.raises(ValueError, match='inventory exceeds limit'):
+        build.current_pulls(run, overflow)
+    with pytest.raises(ValueError, match='current open PR head'):
+        build.current_pulls(run, lambda path: [])
+
+
 @pytest.fixture
 def artifacts(run):
     return [dict(id=index, name='icopy-x-' + variant + '-ipk', expired=False, size_in_bytes=100,

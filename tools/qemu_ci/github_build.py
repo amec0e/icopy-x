@@ -37,15 +37,28 @@ def validate_run(run, run_id):
 
 
 def current_pulls(run, fetch=api):
-    pulls = run['pull_requests']
+    pulls = list(run['pull_requests'])
     # GitHub can omit fork PR associations from workflow_run. Resolve through
     # the commit API; never treat missing association as permission to pass a PR.
     if not pulls and run['event'] == 'pull_request':
         pulls = fetch('commits/' + run['head_sha'] + '/pulls')
+    # Fork commits can also be absent from GitHub's commit-to-PR index. Use the
+    # bounded live inventory as a final lookup, then re-fetch each exact match
+    # below. An empty association is never permission to publish a passing PR.
+    if not pulls and run['event'] == 'pull_request':
+        for page in range(1, 11):
+            batch = fetch('pulls?state=open&base=main&per_page=100&page=' + str(page))
+            if not isinstance(batch, list):
+                raise ValueError('Invalid open PR inventory')
+            pulls.extend(pull for pull in batch if pull.get('head', {}).get('sha') == run['head_sha'])
+            if len(batch) < 100:
+                break
+        else:
+            raise ValueError('Open PR inventory exceeds limit')
     current = []
     for entry in pulls:
         number = entry['number']
-        if not isinstance(number, int) or number < 1:
+        if type(number) is not int or number < 1:
             raise ValueError('Invalid PR number')
         pull = fetch('pulls/' + str(number))
         if (pull['state'] == 'open' and pull['base']['repo']['full_name'] == REPOSITORY and
