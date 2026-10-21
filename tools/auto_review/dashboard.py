@@ -6,6 +6,7 @@ import re
 from urllib.parse import quote
 
 from . import report
+from .errors import MESSAGES
 
 PREFIX = '<!-- icopy-astra-dashboard-v2 '
 END = ' -->'
@@ -76,7 +77,11 @@ def accept(state, saved, bundle, run_id):
     state = deepcopy(state)
     status, proposal, error = report.validated(saved, bundle)
     if proposal is None:
-        state['notice'] = error or 'No source-validated advisory is available.'
+        diagnostic = MESSAGES.get(saved.get('validation_code'))
+        state['notice'] = ('Reviewer needs maintainer attention: ' + diagnostic +
+            ' Earlier actions remain pending. Inspect the latest run before retrying; '
+            'no automatic paid retry is made.') if diagnostic else (error or
+            'No source-validated advisory is available.')
         return state
     old = {item['id']: item for item in state['items']}
     linked = {}
@@ -85,7 +90,7 @@ def accept(state, saved, bundle, run_id):
             continue
         item = old[follow['id']]
         if follow['status'] == 'open':
-            linked[follow['finding_index']] = follow['id']
+            linked.setdefault(follow['finding_index'], []).append(follow['id'])
         elif follow['status'] == 'resolved' and not saved.get('error'):
             # An explicitly cited correction can be established even when the
             # final source audit names an unrelated coverage gap. A later failed
@@ -99,16 +104,18 @@ def accept(state, saved, bundle, run_id):
         if item['state'] != 'resolved':
             item['state'] = 'unassessed'
     for index, finding in enumerate(proposal['findings'][:MAX_ITEMS]):
-        item_id = linked.get(index)
-        if item_id is None:
+        item_ids = linked.get(index)
+        if item_ids is None:
             # Exact source identity allows safe migration of a legacy result.
             item_id = next((key for key, item in old.items() if
                 item['finding'] == finding and item['head'] == saved['head']), None)
-        if item_id is None:
-            item_id = 'A' + str(state['next_id']).zfill(3)
-            state['next_id'] += 1
-        old[item_id] = dict(id=item_id, state='open', finding=finding,
-                            base=saved['base'], head=saved['head'])
+            if item_id is None:
+                item_id = 'A' + str(state['next_id']).zfill(3)
+                state['next_id'] += 1
+            item_ids = [item_id]
+        for item_id in item_ids:
+            old[item_id] = dict(id=item_id, state='open', finding=finding,
+                                base=saved['base'], head=saved['head'])
     state['items'] = list(old.values())
     state['review'] = dict(status=status, base=saved['base'], head=saved['head'],
         integration_base=bundle.get('integration_base', saved['base']), run_id=run_id,

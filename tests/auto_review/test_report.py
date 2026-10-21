@@ -84,6 +84,14 @@ class ReportTests(unittest.TestCase):
         self.assertIn('No source-validated advisory', rendered)
         self.assertNotIn('No findings were returned', rendered)
 
+    def test_rejected_proposal_is_never_displayed_or_promoted(self):
+        saved = dict(self.saved, status='INCOMPLETE', error='ValidationError', review=None,
+                     rejected_review=self.proposal, validation_code='follow_up_finding')
+        status, proposal, error = report.validated(saved, self.bundle)
+        self.assertEqual(status, 'INCOMPLETE')
+        self.assertIsNone(proposal)
+        self.assertNotIn('Wrong result.', report.render(saved, self.bundle))
+
     def test_complete_label_cannot_override_missing_or_partial_review(self):
         self.assertNotIn('**ADVISORY_COMPLETE**', report.render(dict(status='ADVISORY_COMPLETE')))
         self.proposal['completion'] = 'incomplete'

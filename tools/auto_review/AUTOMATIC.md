@@ -114,6 +114,11 @@ ledger is bounded to 120 records per PR and 1,000 comments per API collection; a
 overflow or unavailable GitHub API prevents new paid work rather than silently
 under-counting usage. A publication outage can delay the final comment; the
 workflow artifact and reservation link remain available.
+Parsed proposals rejected by validation are retained as `rejected_review` in the
+report artifact for offline diagnosis, within the input byte limit. They are
+never published or used to resolve checklist actions; only source-validated
+`review` content is eligible. This avoids paying again just to inspect a rejected
+finding mapping. No automatic retry is introduced.
 
 ## Scope and maintenance
 
