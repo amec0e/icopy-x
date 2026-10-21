@@ -35,7 +35,10 @@ SCHEMA['properties'].update({
         'reason': TEXT, 'evidence': dict(type='array', items=CITATION)})),
     'follow_up': dict(type='array', items=obj({
         'id': TEXT, 'status': dict(type='string', enum=['open', 'resolved', 'not_assessed']),
-        'finding_index': dict(type='integer'), 'reason': TEXT,
+        'finding_index': dict(type='integer', description=(
+            'For open: zero-based index into this response\'s findings array (first finding is 0). '
+            'Several previous IDs may reference the same consolidated finding. '
+            'For resolved or not_assessed: use -1; this index is not used.')), 'reason': TEXT,
         'evidence': dict(type='array', items=CITATION)})),
 })
 SCHEMA['required'] = list(SCHEMA['properties'])
@@ -83,15 +86,14 @@ def validate(review, bundle):
         follow = review['follow_up']
         if len(follow) != len(prior) or {row['id'] for row in follow} != set(prior):
             raise ValidationError('follow_up_coverage')
-        mapped = set()
         for row in follow:
             index = row['finding_index']
             if row['status'] == 'open':
-                if not 0 <= index < len(review['findings']) or index in mapped:
+                if not 0 <= index < len(review['findings']):
                     raise ValidationError('follow_up_finding')
-                mapped.add(index)
-            elif index != -1:
-                raise ValidationError('follow_up_finding')
+            # This field has no meaning for a closed/unassessed item. Resolution
+            # is established by status and current source citations below, not
+            # by the spelling of an unused sentinel.
             if row['status'] == 'resolved' and not row['evidence']:
                 raise ValidationError('resolution_evidence')
             if row['status'] == 'not_assessed' and review['completion'] == 'complete':

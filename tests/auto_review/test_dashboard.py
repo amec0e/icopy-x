@@ -96,6 +96,46 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(state['items'][0]['id'], item_id)
         self.assertEqual(state['items'][0]['state'], 'open')
 
+    def test_unused_resolution_index_cannot_discard_valid_cited_progress(self):
+        item_id = self.prior()
+        for index in (-1, 0, 99):
+            with self.subTest(index=index):
+                self.proposal['follow_up'] = [dict(id=item_id, status='resolved', finding_index=index,
+                    reason='The current source establishes the correction.', evidence=[self.cite])]
+                self.assertEqual(self.accept()['items'][0]['state'], 'resolved')
+                self.proposal['follow_up'][0]['evidence'] = []
+                with self.assertRaises(ValueError):
+                    validate(self.proposal, self.bundle)
+
+    def test_invalid_mapping_is_a_maintainer_problem_and_keeps_old_actions(self):
+        item_id = self.prior()
+        self.saved.update(review=None, validation_code='follow_up_finding', error='ValidationError')
+        state = self.accept()
+        self.assertEqual(state['items'], self.state['items'])
+        self.assertEqual(state['items'][0]['id'], item_id)
+        self.assertIn('Reviewer needs maintainer attention', state['notice'])
+        self.assertEqual(dashboard.readiness(state)[0], 'NO-GO')
+
+    def test_consolidated_finding_keeps_every_prior_action_open(self):
+        first = self.prior()
+        second = 'A002'
+        item = copy.deepcopy(self.state['items'][0])
+        item['id'] = second
+        self.state['items'].append(item)
+        self.state['next_id'] = 3
+        self.bundle['previous_items'] = dashboard.pending_items(self.state)
+        self.proposal['findings'] = [self.finding()]
+        self.proposal['follow_up'] = [dict(id=key, status='open', finding_index=0,
+            reason='The same correction addresses both earlier descriptions.', evidence=[self.cite])
+            for key in (first, second)]
+        state = self.accept()
+        self.assertEqual([(i['id'], i['state']) for i in state['items']], [(first, 'open'), (second, 'open')])
+        self.assertEqual(dashboard.readiness(state)[0], 'NO-GO')
+        for index in (-1, 1, 99):
+            self.proposal['follow_up'][0]['finding_index'] = index
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                validate(self.proposal, self.bundle)
+
     def test_resolutions_require_current_source_and_coverage_of_every_prior_id(self):
         item_id = self.prior()
         resolution = dict(id=item_id, status='resolved', finding_index=-1,

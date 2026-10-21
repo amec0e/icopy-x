@@ -524,6 +524,11 @@ class PilotTests(unittest.TestCase):
                 self.assertEqual(len(report['calls']), 1)
                 self.assertNotIn('untrusted-invalid-json', json.dumps(report))
                 self.assertNotIn('fixture-key', json.dumps(report))
+                if stage == 'evidence':
+                    self.assertEqual(report['rejected_review'], json.loads(response['output'][0]['content'][0]['text']))
+                    self.assertGreater(report['rejected_review_bytes'], 0)
+                else:
+                    self.assertNotIn('rejected_review', report)
 
     def test_numbered_prompt_keeps_original_evidence_and_citations(self):
         self.write('context.py', '# Unicode: \u00e9\n\n\tpass\n')
@@ -543,12 +548,25 @@ class PilotTests(unittest.TestCase):
             return self.response(valid)
         report = reviewer.review(bundle, 'policy', 'fixture', request_fn=send)
         self.assertEqual(report['status'], 'ADVISORY_COMPLETE')
+
         self.assertEqual(report['snapshot_sha256'], snapshots.digest(bundle))
         self.assertEqual(snapshots.canonical(bundle), before)
         # Numbering is a prompt aid, not permission to accept altered quotes.
         valid['findings'][0]['quote'] = '3\t\tpass'
         with self.assertRaisesRegex(ValueError, 'line/quote'):
             contract.validate(valid, bundle)
+
+    def test_rejected_diagnostic_output_has_a_byte_limit(self):
+        bundle = self.bundle()
+        bundle['limits']['max_bytes'] = 20000
+        invalid = self.valid()
+        invalid['findings'][0]['impact'] = 'x' * 30000
+        saved = reviewer.review(bundle, 'policy', 'fixture-key',
+                                request_fn=lambda *args: self.response(invalid))
+        self.assertEqual(saved['validation_code'], 'text_limit')
+        self.assertGreater(saved['rejected_review_bytes'], 20000)
+        self.assertNotIn('rejected_review', saved)
+        self.assertIsNone(saved['review'])
 
     def test_unchanged_context_shares_source_without_changing_citation_evidence(self):
         self.write('context.py', '# Unicode: \u00e9\n\n\tpass\n')

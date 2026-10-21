@@ -86,7 +86,11 @@ automatically mean incomplete source coverage; missing relevant code does.
 
 When previous_items are supplied, re-evaluate every item against this snapshot.
 Return one follow_up per ID. Map still-open items to the zero-based findings
-index, retaining the same issue identity even if lines or wording changed. Mark
+index into this response's findings array (the first finding is index 0),
+retaining the same issue identity even if lines or wording changed. Several
+previous IDs may map to one consolidated finding; each ID still needs its own
+follow_up row. For resolved and not_assessed rows, use finding_index -1; there is
+no finding to link. Mark
 resolved only after checking the correction and relevant regression evidence;
 cite current source (or the old source of a file actually deleted). Explain why
 it is fixed or why the previous claim was wrong. Use not_assessed when evidence

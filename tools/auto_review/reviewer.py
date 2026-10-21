@@ -186,6 +186,7 @@ def review(bundle, policy, key, request_fn=None, max_output_tokens=DEFAULT_OUTPU
     deadline = time.monotonic() + review_budget_seconds
     previous = None
     for task in PASSES:
+        proposal = None
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             report.update(error='TimeoutError', failed_pass=task, failure_stage='deadline', review=previous)
@@ -241,6 +242,14 @@ def review(bundle, policy, key, request_fn=None, max_output_tokens=DEFAULT_OUTPU
             # Keep attempted requests, returned accounting and the last validated proposal, but
             # never promote a partial review or retry a potentially billed call.
             report.update(error=type(error).__name__, failed_pass=task, failure_stage=stage, review=previous)
+            # Preserve a parsed but rejected proposal for offline diagnosis. It
+            # is untrusted evidence, never the published/accepted review. Avoid
+            # another generation merely to recover why validation rejected it.
+            if stage == 'evidence' and proposal is not None:
+                size = len(canonical(proposal))
+                report['rejected_review_bytes'] = size
+                if size <= bundle['limits']['max_bytes']:
+                    report['rejected_review'] = proposal
             if isinstance(error, background.ReviewDeadline):
                 report['failure_stage'] = 'deadline'
             if isinstance(error, background.CheckpointError):
