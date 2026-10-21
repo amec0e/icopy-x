@@ -137,6 +137,18 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(dashboard.readiness(restored)[0], 'NO-GO')
         self.assertIn('Display shortened', rendered)
 
+    def test_check_matches_compacted_no_go_comment(self):
+        for assessment in self.proposal['assessments']:
+            assessment['reason'] = 'Supported contract. ' * 350
+        state = self.accept()
+        self.assertEqual(dashboard.readiness(state)[0], 'GO')
+        api = fixtures.FakeGitHub(dict(base={'sha': 'a' * 40}))
+        state['current']['pr'] = 123
+        auto.put_dashboard(api, state)
+        published = dashboard.load(api.comments[0], auto.BOT_ID)
+        self.assertEqual(dashboard.readiness(published)[0], 'NO-GO')
+        self.assertEqual(api.check_runs[0]['conclusion'], 'action_required')
+
 
 class ChecklistQueueTests(unittest.TestCase):
     def setUp(self):

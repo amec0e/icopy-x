@@ -166,15 +166,18 @@ def state_for(comments, current):
 
 def put_dashboard(api, state, comment=None):
     outgoing = dashboard.body(state)
+    # A bounded display may mark coverage as needing the full artifact. The
+    # check must reflect the state actually published, never the larger input.
+    published = dashboard.load(dict(body=outgoing, user={'id': BOT_ID}), BOT_ID)
     if comment and comment['body'] == outgoing:
-        checks.publish(api, route, state, comment['id'])
+        checks.publish(api, route, published, comment['id'])
         return comment['id']
     path = ('/issues/comments/' + str(integer(comment['id'])) if comment else
             '/issues/' + str(state['current']['pr']) + '/comments')
     result = api('PATCH' if comment else 'POST', route(path), {'body': outgoing})
     if comment is not None:
         comment['body'] = outgoing
-    checks.publish(api, route, state, result['id'])
+    checks.publish(api, route, published, result['id'])
     return integer(result['id'])
 
 
