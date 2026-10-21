@@ -29,6 +29,13 @@ def source(finding, base, head):
     return '<a href="' + html.escape(url, quote=True) + '">' + text(path) + ':' + str(finding['line']) + '</a>'
 
 
+def ci_label(row):
+    url = row.get('url') or ''
+    if re.fullmatch(r'https://github.com/lab-401/icopy-x/actions/runs/[0-9]+(?:/job/[0-9]+)?', url):
+        return '<a href="' + url + '">' + text(row['name']) + '</a>'
+    return text(row['name'])
+
+
 def load(comment, bot_id):
     if comment.get('user', {}).get('id') != bot_id:
         return None
@@ -168,7 +175,7 @@ def render(state):
                      'No current source review yet; this is not a pass.')
     lines += ['', '### Passing checks and resolved issues', '']
     passed = [row for row in state.get('ci', []) if row['state'] == 'pass']
-    lines += ['- [x] CI: ' + text(row['name']) for row in passed]
+    lines += ['- [x] CI: ' + ci_label(row) for row in passed]
     resolved = [i for i in state['items'] if i['state'] == 'resolved']
     for item in resolved:
         lines.append('- [x] **' + item['id'] + '** — ' + text(item['resolution']) +
@@ -187,7 +194,7 @@ def render(state):
         lines.append('- [ ] Update the branch with current main and rerun CI before merging.')
     for row in state.get('ci', []):
         if row['state'] != 'pass':
-            lines.append('- [ ] **CI: ' + text(row['name']) + '** — ' + text(row['state']) + '.')
+            lines.append('- [ ] **CI: ' + ci_label(row) + '** — ' + text(row['state']) + '.')
     if review:
         for row in review.get('assessments', []):
             if row['status'] != 'pass':

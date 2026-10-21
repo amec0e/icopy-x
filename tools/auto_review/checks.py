@@ -74,7 +74,8 @@ def collect(api, route, pr):
                   'pass' if row.get('conclusion') == 'success' else row.get('conclusion') or 'unknown')
         if name == 'QEMU critical flows':
             status = qemu_state
-        answer.append(dict(name=name, state=status))
+        answer.append(dict(name=name, state=status, url=(qemu.get('target_url') if qemu else None)
+                           if name == 'QEMU critical flows' else row.get('html_url') if row else None))
     return answer
 
 

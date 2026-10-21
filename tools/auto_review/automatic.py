@@ -267,7 +267,8 @@ def recipes(changed):
         add(['src/lib/plugin_activity.py', 'src/lib/plugin_loader.py', 'src/lib/plugins_menu.py',
              'src/lib/json_renderer.py', 'src/middleware/executor.py', 'src/middleware/pm3_compat.py',
              'src/middleware/pm3_localize.py', 'src/main/rftask.py', 'tests/ui/test_plugin_activity.py',
-             'tests/ui/test_plugin_integration.py', 'tests/ui/test_plugin_loader.py'],
+             'tests/ui/test_plugin_integration.py', 'tests/ui/test_plugin_loader.py',
+             'tests/ui/test_plugin_i18n.py', 'tools/plugin_i18n.py', 'src/lib/resources.py'],
             'Plugin dispatch, rendering, discovery, PM3 ownership and regression contracts.')
     if any(p.startswith('src/middleware/') for p in changed):
         add(['src/middleware/executor.py', 'src/middleware/pm3_compat.py',
@@ -376,6 +377,10 @@ def select(api, environ, output, prepare_fn=prepare, now=None):
             bundle = prepare_fn(pr, Path('.'))
             # Test collectors and imported evidence must bind the same prior list.
             bundle['previous_items'] = pr['_astra_previous_items']
+            bundle['ci_observations'] = dict(head=current['head'], checks=state['ci'],
+                limitation='GitHub job/status metadata, not test logs or model-executed tests.')
+            if len(snapshots.canonical(bundle)) > bundle['limits']['max_bytes']:
+                raise ValueError('Source and prior-action evidence exceed the review input budget')
             if bundle['gaps']:
                 examples = '\n'.join(str(gap.get('path', '')) + ': ' + str(gap.get('reason', ''))
                                      for gap in bundle['gaps'][:8])
