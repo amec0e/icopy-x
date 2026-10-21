@@ -11,6 +11,10 @@ on:
         description: Optional PR number; does not bypass deduplication or the allowance
         type: string
         default: ''
+      refresh_only:
+        description: Refresh the existing checklist and CI without a paid model call
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -30,6 +34,7 @@ jobs:
       contents: read
       pull-requests: write
       actions: read
+      checks: write
     outputs:
       ready: ${{ steps.queue.outputs.ready }}
     steps:
@@ -48,6 +53,7 @@ jobs:
           ASTRA_AUTOMATIC_REVIEW: ${{ vars.ASTRA_AUTOMATIC_REVIEW }}
           ASTRA_REVIEW_DAILY_LIMIT: ${{ vars.ASTRA_REVIEW_DAILY_LIMIT }}
           ASTRA_TARGET_PR: ${{ inputs.pull_request }}
+          ASTRA_REFRESH_ONLY: ${{ inputs.refresh_only }}
         run: python -m tools.auto_review.automatic select
       - name: Preserve immutable reservation and source
         if: steps.queue.outputs.ready == 'true'
@@ -104,6 +110,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      checks: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

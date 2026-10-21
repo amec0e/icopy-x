@@ -15,7 +15,7 @@ from urllib.parse import urlencode
 from urllib.error import HTTPError
 from urllib.request import Request, build_opener
 
-from . import cli, profiles, report, reviewer, snapshots
+from . import checks, cli, dashboard, profiles, report, reviewer, snapshots
 
 REPOSITORY = 'lab-401/icopy-x'
 REPOSITORY_ID = 1187322254
@@ -57,7 +57,7 @@ class GitHub:
             raw = response.read(8_000_001)
         if len(raw) > 8_000_000:
             raise ValueError('GitHub response exceeds limit')
-        return json.loads(raw)
+        return json.loads(raw) if raw else None
 
 
 def route(suffix=''):
@@ -112,11 +112,20 @@ def current_pr(api, number):
 def marker(comment):
     if comment.get('user', {}).get('id') != BOT_ID:
         return None
+    current = dashboard.load(comment, BOT_ID)
+    if current is not None:
+        return checked_record(current['current'])
     first = comment.get('body', '').split('\n', 1)[0]
     if not first.startswith(PREFIX) or not first.endswith(' -->') or len(first) > 3000:
         return None
     try:
-        value = json.loads(first[len(PREFIX):-4])
+        return checked_record(json.loads(first[len(PREFIX):-4]))
+    except (ValueError, TypeError, KeyError):
+        return None
+
+
+def checked_record(value):
+    try:
         if (value['repository_id'] != REPOSITORY_ID or value['state'] not in STATES or
                 not SHA.fullmatch(value['base']) or not SHA.fullmatch(value['head'])):
             return None
@@ -126,6 +135,58 @@ def marker(comment):
         return value
     except (ValueError, TypeError, KeyError):
         return None
+
+
+def records(comment):
+    state = dashboard.load(comment, BOT_ID)
+    if state is not None:
+        values = [checked_record(r) for r in state['records']]
+        if any(r is None for r in values):
+            raise ValueError('Invalid dashboard reservation ledger')
+        return values
+    value = marker(comment)
+    return [value] if value else []
+
+
+def state_for(comments, current):
+    candidates = [(comment, dashboard.load(comment, BOT_ID)) for comment in comments]
+    existing = [(c, s) for c, s in candidates if s is not None and s['current']['pr'] == current['pr']]
+    if existing:
+        comment, state = existing[-1]
+    else:
+        legacy = [c for c in comments if marker(c) and marker(c)['pr'] == current['pr']]
+        comment, state = (legacy[-1] if legacy else None), dashboard.blank()
+    combined = {(r['pr'], r['base'], r['head'], r['run_id']): r
+                for c in comments for r in records(c) if r['pr'] == current['pr']}
+    # The dashboard is authoritative for migrated records finalized in place.
+    combined.update({(r['pr'], r['base'], r['head'], r['run_id']): r for r in state['records']})
+    state['records'] = list(combined.values())
+    return state, comment
+
+
+def put_dashboard(api, state, comment=None):
+    outgoing = dashboard.body(state)
+    # A bounded display may mark coverage as needing the full artifact. The
+    # check must reflect the state actually published, never the larger input.
+    published = dashboard.load(dict(body=outgoing, user={'id': BOT_ID}), BOT_ID)
+    if comment and comment['body'] == outgoing:
+        checks.publish(api, route, published, comment['id'])
+        return comment['id']
+    path = ('/issues/comments/' + str(integer(comment['id'])) if comment else
+            '/issues/' + str(state['current']['pr']) + '/comments')
+    result = api('PATCH' if comment else 'POST', route(path), {'body': outgoing})
+    if comment is not None:
+        comment['body'] = outgoing
+    checks.publish(api, route, published, result['id'])
+    return integer(result['id'])
+
+
+def observe_ci(api, state, pr):
+    try:
+        state['ci'] = checks.collect(api, route, pr)
+    except (ValueError, OSError, KeyError, TypeError):
+        state['ci'] = [dict(name='CI evidence', state='unavailable; not a pass')]
+    state['integration_pending'] = pr.get('mergeable_state') not in ('clean', 'unstable', 'blocked')
 
 
 def same(left, right):
@@ -179,8 +240,14 @@ def reconcile(api, current, comments):
             text = ('**INCOMPLETE** — the reserved run ended without publishing a result, or its '
                     'run record is no longer available. Inspect prior evidence/usage; '
                     'no automatic retry will incur another charge.')
-        put_comment(api, final, text, comment['id'])
-        comment['body'] = body(final, text)
+        state = dashboard.load(comment, BOT_ID)
+        if state is not None:
+            state = dashboard.remember(state, final)
+            state['notice'] = text.replace('**', '')
+            put_dashboard(api, state, comment)
+        else:
+            put_comment(api, final, text, comment['id'])
+            comment['body'] = body(final, text)
 
 
 def recipes(changed):
@@ -188,12 +255,21 @@ def recipes(changed):
     selected = {}
     def add(paths, reason):
         selected.update({path: reason for path in paths})
-    if any(p in ('src/middleware/ics_decoder.py', 'src/lib/actmain.py') or
-           'ics_' in p or 'decoder_menu' in p for p in changed):
+    if any(p in ('src/middleware/ics_decoder.py', 'src/lib/actmain.py', 'src/lib/activity_main.py') or
+           'ics_' in p or 'decoder_' in p for p in changed):
         add(profiles.PROFILES['accessory-menu']['paths'], 'Accessory/menu callers and lifecycle.')
         add(['tests/ui/activities/test_ics_decoder.py', 'tools/qemu_env.sh',
              'src/main/rftask.py', 'src/middleware/executor.py', 'src/middleware/pm3_compat.py',
              'src/middleware/pm3_localize.py'], 'Serial ownership, localization and harness boundaries.')
+        add(['tests/ui/activities/test_decoder_workers.py', 'tests/ui/test_pm3_operation_ownership.py',
+             'tests/qemu_artifact/strict_transport.py'], 'Worker and persistent transcript assertions.')
+    if any(p.startswith('plugins/') or 'plugin_' in p or 'input_' in p for p in changed):
+        add(['src/lib/plugin_activity.py', 'src/lib/plugin_loader.py', 'src/lib/plugins_menu.py',
+             'src/lib/json_renderer.py', 'src/middleware/executor.py', 'src/middleware/pm3_compat.py',
+             'src/middleware/pm3_localize.py', 'src/main/rftask.py', 'tests/ui/test_plugin_activity.py',
+             'tests/ui/test_plugin_integration.py', 'tests/ui/test_plugin_loader.py',
+             'tests/ui/test_plugin_i18n.py', 'tools/plugin_i18n.py', 'src/lib/resources.py'],
+            'Plugin dispatch, rendering, discovery, PM3 ownership and regression contracts.')
     if any(p.startswith('src/middleware/') for p in changed):
         add(['src/middleware/executor.py', 'src/middleware/pm3_compat.py',
              'src/middleware/pm3_localize.py', 'src/main/rftask.py'], 'Shared command/response transport contract.')
@@ -210,7 +286,7 @@ def recipes(changed):
                                                  '.github/workflows/astra-')) for p in changed):
         add(['tools/auto_review/' + name for name in ('automatic.py', 'hosted.py', 'cli.py',
              'snapshots.py', 'reviewer.py', 'background.py', 'contract.py', 'report.py',
-             'profiles.py', 'policy.md')], 'Reviewer trust, output and source-coverage contracts.')
+             'profiles.py', 'policy.md', 'dashboard.py', 'checks.py')], 'Reviewer trust, output and source-coverage contracts.')
         add(['.github/workflows/astra-pr-review.yml', '.github/workflows/astra-review-pilot.yml',
              '.github/workflows/test-host.yml', '.github/workflows/qemu-critical.yml'],
             'Actual automation and contributor CI boundaries.')
@@ -229,11 +305,23 @@ def prepare(pr, repo):
         '--no-recurse-submodules', 'https://github.com/' + REPOSITORY + '.git', current['base'], current['head']],
         env=env, check=True, timeout=120, stdout=subprocess.DEVNULL)
     # No checkout, imports, hooks, filters or PR-selected executable/configuration.
-    initial = snapshots.collect(repo, current['base'], current['head'])
+    comparison_base = snapshots.git(repo, 'merge-base', current['base'], current['head']).decode().strip()
+    initial = snapshots.collect(repo, comparison_base, current['head'])
     context = recipes([row['path'] for row in initial['files'] if row['changed']])
-    bundle = snapshots.collect(repo, current['base'], current['head'], context)
+    previous = pr.get('_astra_previous_items', [])
+    inventory = snapshots.tree(repo, comparison_base).keys() | snapshots.tree(repo, current['head']).keys()
+    for item in previous:
+        path = item['finding']['path']
+        if path in inventory:
+            context[path] = 'Recheck an earlier contributor action against this revision.'
+    # Reviewing a branch does not require repeatedly merging unrelated main
+    # changes into it. Report the real comparison base and prevent GO until
+    # current-main integration and CI are established.
+    bundle = snapshots.collect(repo, comparison_base, current['head'], context)
+    bundle['integration_base'] = current['base']
+    bundle['previous_items'] = previous
     bundle['stated_purpose'] = purpose
-    bundle['context_selection'] = dict(profile='automatic-v1', paths=context,
+    bundle['context_selection'] = dict(profile='automatic-v2', paths=context,
         limitation='Maintained starting contexts; model must disclose missing dependencies.')
     if len(snapshots.canonical(bundle)) > bundle['limits']['max_bytes']:
         bundle['gaps'].append(dict(path='', side='', reason='serialized bundle exceeds input budget'))
@@ -254,8 +342,8 @@ def select(api, environ, output, prepare_fn=prepare, now=None):
         raise ValueError('Unexpected repository identity/default branch')
     cutoff = timestamp(now - timedelta(hours=24))
     ledger = pages(api, route('/issues/comments'), {'since': cutoff, 'sort': 'updated', 'direction': 'desc'})
-    reserved = {comment['id'] for comment in ledger if (marker(comment) or {}).get('reserved_at', '')
-                and marker(comment)['reserved_at'] >= cutoff}
+    reserved = {(r['pr'], r['run_id']) for comment in ledger for r in records(comment)
+                if r.get('reserved_at') and r['reserved_at'] >= cutoff}
     prs = pages(api, route('/pulls'), {'state': 'open', 'base': 'main', 'sort': 'created', 'direction': 'asc'})
     requested = environ.get('ASTRA_TARGET_PR', '').strip()
     if requested:
@@ -268,31 +356,31 @@ def select(api, environ, output, prepare_fn=prepare, now=None):
         current = identity(pr)
         comments = pages(api, route('/issues/' + str(current['pr']) + '/comments'))
         reconcile(api, current, comments)
-        prior = [(comment, marker(comment)) for comment in comments if marker(comment) and same(marker(comment), current)]
+        state, comment = state_for(comments, current)
+        prior = [r for r in state['records'] if same(r, current)]
         previous = prior[-1] if prior else None
-        if previous and previous[1]['state'] != 'DEFERRED':
+        observe_ci(api, state, pr)
+        if previous and previous['state'] != 'DEFERRED':
+            state['current'] = previous
+            put_dashboard(api, state, comment)
             continue
         record = dict(current, state='DEFERRED', reserved_at=None, run_id=run_id)
-        comment_id = previous[0]['id'] if previous else None
-        if comment_id is None:
-            # A main update need not add another "please update your branch"
-            # comment. Only reuse notices that never reserved paid work; paid
-            # records remain durable even when their source identity is obsolete.
-            reusable = [comment for comment in comments if marker(comment) and
-                        marker(comment)['pr'] == current['pr'] and
-                        marker(comment)['head'] == current['head'] and
-                        marker(comment)['reserved_at'] is None and
-                        marker(comment)['state'] in ('INCOMPLETE', 'DEFERRED')]
-            if reusable:
-                comment_id = reusable[-1]['id']
-        if len(reserved) >= limit:
-            if previous is None:
-                put_comment(api, record, '**DEFERRED** — the rolling 24-hour automatic review allowance is used. '
-                            'The queue will reconsider this commit when capacity is available; CI continues normally.',
-                            comment_id)
+        if len(reserved) >= limit or environ.get('ASTRA_REFRESH_ONLY') == 'true':
+            state = dashboard.remember(state, previous or record)
+            state['notice'] = ('Review queued: the rolling 24-hour allowance is used. The queue will '
+                'review the latest commit when capacity returns; no action is needed to obtain a slot.'
+                if len(reserved) >= limit else 'Review queued. This run only refreshed the checklist and CI.')
+            put_dashboard(api, state, comment)
             continue
         try:
+            pr['_astra_previous_items'] = dashboard.pending_items(state)
             bundle = prepare_fn(pr, Path('.'))
+            # Test collectors and imported evidence must bind the same prior list.
+            bundle['previous_items'] = pr['_astra_previous_items']
+            bundle['ci_observations'] = dict(head=current['head'], checks=state['ci'],
+                limitation='GitHub job/status metadata, not test logs or model-executed tests.')
+            if len(snapshots.canonical(bundle)) > bundle['limits']['max_bytes']:
+                raise ValueError('Source and prior-action evidence exceed the review input budget')
             if bundle['gaps']:
                 examples = '\n'.join(str(gap.get('path', '')) + ': ' + str(gap.get('reason', ''))
                                      for gap in bundle['gaps'][:8])
@@ -302,22 +390,23 @@ def select(api, environ, output, prepare_fn=prepare, now=None):
             record['state'] = 'INCOMPLETE'
             # Only collector ValueErrors have fixed, non-secret diagnostic text.
             reason = str(error) if type(error) is ValueError else type(error).__name__
-            put_comment(api, record, '**INCOMPLETE — no API call made.**\n\n' + report.block(reason[:1000]) +
-                '\nUpdate a stale branch or split unrelated/oversized changes; a maintainer can prepare '
-                'a focused review with explicit context. This is not a completed source audit.', comment_id)
+            state = dashboard.remember(state, record)
+            state['notice'] = ('Review incomplete; no API call made. ' + reason[:1000] +
+                ' The reviewer needs this evidence before it can assess the current revision.')
+            put_dashboard(api, state, comment)
             continue
         # Recheck after fetching/collecting and immediately before reservation.
         fresh = current_pr(api, current['pr'])
         if fresh.get('state') != 'open' or fresh.get('draft') or not same(identity(fresh), current):
             continue
         record.update(state='RESERVED', reserved_at=timestamp(reservation_clock()))
-        comment_id = put_comment(api, record, '**Review reserved** for head `' + current['head'] +
-            '` against base `' + current['base'] + '`. Up to three Astra passes will run. '
-            'Findings and coverage gaps will replace this notice; no automatic retry is scheduled.', comment_id)
+        state = dashboard.remember(state, record)
+        state['notice'] = 'Review in progress. Earlier actions stay visible until they are rechecked.'
+        comment_id = put_dashboard(api, state, comment)
         policy = Path(__file__).with_name('policy.md').read_text(encoding='utf-8')
         output.mkdir(parents=True, exist_ok=False)
         (output / 'identity.json').write_text(json.dumps(dict(record, comment_id=comment_id,
-            tool_revision=environ['GITHUB_SHA'], snapshot_sha256=snapshots.digest(bundle),
+            tool_revision=environ['GITHUB_SHA'], comparison_base=bundle['base'], snapshot_sha256=snapshots.digest(bundle),
             policy_sha256=snapshots.digest(policy)), indent=2), encoding='utf-8')
         (output / 'snapshot.json').write_text(json.dumps(bundle, indent=2), encoding='utf-8')
         return True
@@ -334,7 +423,9 @@ def checked_input(directory, environ):
             record.get('state') != 'RESERVED' or
             record.get('snapshot_sha256') != snapshots.digest(bundle) or
             record.get('policy_sha256') != snapshots.digest(policy) or
-            record.get('base') != bundle.get('base') or record.get('head') != bundle.get('head')):
+            record.get('comparison_base', record.get('base')) != bundle.get('base') or
+            record.get('base') != bundle.get('integration_base', bundle.get('base')) or
+            record.get('head') != bundle.get('head')):
         raise ValueError('Review artifact identity mismatch')
     integer(record['comment_id']); integer(record['pr'])
     return record, bundle, policy
@@ -369,11 +460,13 @@ def publish(api, environ, directory):
     saved = marker(comment)
     if not saved or not same(saved, record) or saved['run_id'] != record['run_id'] or saved['state'] != 'RESERVED':
         raise ValueError('Publication reservation mismatch')
+    state = dashboard.load(comment, BOT_ID) or dashboard.remember(dashboard.blank(), saved)
     current = current_pr(api, record['pr'])
     if current.get('state') != 'open' or current.get('draft') or not same(identity(current), record):
         final = dict(saved, state='STALE')
         text = '**STALE** — the PR closed, became a draft, or its base/head changed. '
         text += 'This result is historical evidence only; no findings are published against the new revision.'
+        state['notice'] = text.replace('**', '')
     else:
         try:
             result = report.read_json(directory / 'report.json')
@@ -381,14 +474,24 @@ def publish(api, environ, directory):
             result = dict(status='INCOMPLETE', advisory=True, error='MissingReviewEvidence')
         valid = (result.get('snapshot_sha256') == record['snapshot_sha256'] and
                  result.get('policy_sha256') == record['policy_sha256'] and
-                 result.get('base') == record['base'] and result.get('head') == record['head'])
+                 result.get('base') == bundle['base'] and result.get('head') == record['head'])
         if not valid:
             result = dict(status='INCOMPLETE', advisory=True, error='MissingOrMismatchedReviewEvidence')
-        # The renderer revalidates source quotations and treats model text literally.
-        text = report.render(result, bundle)
-        complete = '**ADVISORY_COMPLETE**' in text[:200]
-        final = dict(saved, state='ADVISORY_COMPLETE' if complete else 'INCOMPLETE')
-    put_comment(api, final, text, record['comment_id'])
+        # Validation is structured, never inferred from rendered Markdown.
+        status, _, _ = report.validated(result, bundle)
+        state = dashboard.accept(state, result, bundle, record['run_id'])
+        final = dict(saved, state=status)
+        state['integration_pending'] = bundle['base'] != record['base']
+    state = dashboard.remember(state, final)
+    if final['state'] == 'STALE' and current.get('state') == 'open' and not current.get('draft'):
+        # Keep the old paid reservation while making the visible checklist
+        # describe the actual new revision, not the obsolete reviewed head.
+        state = dashboard.remember(state, dict(identity(current), state='DEFERRED',
+                                   reserved_at=None, run_id=record['run_id']))
+    observe_ci(api, state, current)
+    if bundle['base'] != record['base']:
+        state['integration_pending'] = True
+    put_dashboard(api, state, comment)
 
 
 def main(argv=None):

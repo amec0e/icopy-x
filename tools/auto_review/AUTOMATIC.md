@@ -4,7 +4,38 @@
 15 minutes. GitHub schedules can be delayed; maintainers can dispatch the workflow
 with an optional PR number. It reviews one current base/head pair at a time with
 `gpt-6-astra`, then posts findings, scope decisions and explicit coverage gaps in
-one PR comment. It never approves, merges, changes code or replaces required CI.
+one persistent PR checklist. It never approves, merges, changes code or replaces required CI.
+
+## Reading the checklist
+
+- **Blocking issues:** P0–P2 corrections, each with a stable action ID, a source
+  link, the failure trigger and a concrete requested change/regression check.
+- **Passing checks and resolved issues:** CI read from GitHub for the current
+  revision, cited source assessments, and earlier actions explicitly rechecked
+  by Astra. Merely disappearing from a response does not resolve an action.
+  A final, cited source correction can be shown as resolved while another area
+  still lacks coverage; the overall status remains NO-GO. An interrupted later
+  pass cannot promote an earlier proposal into a resolved action.
+- **Assessments:** scope decisions, missing context, unfinished CI and relevant
+  physical evidence. These are separate from confirmed code defects.
+- **Suggestions:** optional P3 improvements, separate from required fixes.
+
+The same comment is edited on subsequent runs. Earlier findings stay visible as
+needing recheck when the head changes; omissions and failed runs cannot silently
+close them. The source audit explicitly revisits each prior action with current
+citations. Technical coverage and token accounting are under a disclosure.
+
+**GO — ready for maintainer review** requires a complete current source audit,
+no open code blockers or unresolved assessments, current-main integration, and
+successful host, QEMU, package and reviewer checks from GitHub Actions. The
+`Astra readiness` check shows the same decision in the checks list. Missing,
+skipped, failed, foreign-app or obsolete-merge checks cannot produce GO. GO is
+a recommendation for final maintainer review, never automatic merge approval or
+a guarantee of hardware behavior. Remaining physical acceptance keeps NO-GO.
+
+Use workflow input `refresh_only=true` to update CI/checklist state without a
+model call. Normal scheduled scans also refresh already-reviewed PRs without
+charging again. The rolling allowance and no-retry rules still apply.
 
 ## Configuration
 
@@ -30,8 +61,8 @@ as Git blobs and passed as untrusted text. Candidate trees, scripts, tests,
 dependencies and workflows are never executed in this workflow. Ordinary host,
 build and QEMU CI continue to own execution testing.
 
-The selector can reserve/comment but has no API key. The model job has the key
-and read-only GitHub access; it cannot publish. The publisher can comment but has
+The selector can reserve/comment and publish readiness checks but has no API key. The model job has the key
+and read-only GitHub access; it cannot publish. The publisher can comment/check but has
 no API key. Inputs record repository ID, PR, current base/head, trusted tool
 revision, policy hash and snapshot hash. Each stage verifies the same-run
 identity. Current PR state is rechecked after collection, before each generation,
@@ -41,7 +72,8 @@ GitHub's PR metadata can retain an older `base.sha`. Changes to the actual base
 also invalidate the result. Obsolete findings are not presented as a review of
 the new code. A change
 immediately after the final check remains a normal race, so every comment names
-the immutable reviewed commits and is never a required merge check.
+the immutable reviewed commits. The advisory readiness check is not added to
+branch protection by this change; existing required CI remains in force.
 
 Source quotes are revalidated before display. Model/source text is rendered
 literally, with HTML and mentions escaped; source links use the fixed repository
@@ -59,7 +91,7 @@ The manual pilot has a separate group so schedule ticks cannot evict a pending
 maintainer dispatch. A deliberately dispatched manual review can therefore run
 concurrently and incur additional usage outside the automatic allowance.
 
-Bot-owned comments contain a versioned reservation marker. The selector ignores
+The bot-owned checklist contains a versioned hidden state/ledger. The selector ignores
 markers posted by contributors. A reservation is written before the model job
 can start, and remains after failures or stale results, so an ambiguous response
 does not trigger another paid review. Rerunning a failed Actions job cannot
@@ -71,10 +103,14 @@ For intentional repeat evaluation, use the manual pilot after inspecting prior a
 The rolling allowance counts durable reservations, including closed PRs and
 failed/stale attempts, conservatively even if the API was never reached. A
 deferred head gets an explanation and is reconsidered when capacity returns.
-Do not delete/edit reservation markers to clean up comments: they are accounting
-and deduplication state. Maintainers who deliberately remove them must reconcile
-prior usage before re-enabling the queue. Artifact expiry does not erase the
-comment ledger. The ledger is bounded to 1,000 entries per API collection; an
+Legacy comments are consolidated into that ledger before removal; reservations
+are deduplicated by PR/run, not the number of visible comments. Archive the old
+comments and source-validated reports, seed earlier actions, verify every paid
+reservation is retained, then delete only the superseded bot posts. Pause new
+selections during migration so an old publisher cannot overwrite the checklist.
+Never remove the current checklist's state marker: it is accounting and
+deduplication state. Artifact expiry does not erase the comment ledger. The
+ledger is bounded to 120 records per PR and 1,000 comments per API collection; an
 overflow or unavailable GitHub API prevents new paid work rather than silently
 under-counting usage. A publication outage can delay the final comment; the
 workflow artifact and reservation link remain available.
@@ -85,10 +121,14 @@ The collector includes every changed file plus trusted starting contexts for
 accessory lifecycle, command translation/ownership, UI and package changes.
 Reviewer and contribution-guideline changes also receive the engine and actual
 CI workflows so their claims can be checked against implementation.
+Plugin reviews include dispatch, renderer, discovery and PM3 dependencies;
+decoder reviews include worker and strict-transport fixtures.
 These recipes are maintained in `automatic.py`; they are not a complete dynamic
 call graph. Missing dependencies must remain explicit limitations. Binary,
-missing or oversized evidence and stale branches receive a no-API explanation.
-They require a focused split, branch update or maintainer source review; an
+missing or oversized evidence receives a no-API explanation.
+A branch behind main is reviewed against its actual merge base and explicitly
+cannot receive GO until current-main integration is reviewed and tested.
+Evidence gaps require a focused split or maintainer source review; an
 automated coverage refusal does not certify the PR. The full #77–79 tree is one
 such example. The narrow #80–81 tree was reviewed once despite duplicate PRs.
 

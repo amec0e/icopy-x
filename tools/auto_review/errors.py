@@ -1,6 +1,12 @@
 """Public diagnostics are fixed codes, never API bodies or exception text."""
 
 MESSAGES = {
+    'assessment_coverage': 'Every assessment area must be classified exactly once.',
+    'assessment_evidence': 'A passing source assessment requires a valid source citation.',
+    'follow_up_coverage': 'Every previous action must have an explicit disposition.',
+    'follow_up_finding': 'An open previous action must map to one current finding.',
+    'resolution_evidence': 'Resolution requires current source or verified source deletion.',
+    'incomplete_follow_up': 'Unassessed prior actions prevent complete coverage.',
     'field_type': 'Invalid review field type',
     'field_enum': 'Invalid review enum',
     'field_set': 'Missing or extra review fields',
