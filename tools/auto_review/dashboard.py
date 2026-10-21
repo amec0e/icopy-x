@@ -86,12 +86,15 @@ def accept(state, saved, bundle, run_id):
         item = old[follow['id']]
         if follow['status'] == 'open':
             linked[follow['finding_index']] = follow['id']
-        elif follow['status'] == 'resolved' and status == 'ADVISORY_COMPLETE':
+        elif follow['status'] == 'resolved' and not saved.get('error'):
+            # An explicitly cited correction can be established even when the
+            # final source audit names an unrelated coverage gap. A later failed
+            # pass cannot promote an earlier proposal into a resolved action.
             item.update(state='resolved', resolution=follow['reason'],
                         resolved_head=saved['head'], evidence=follow['evidence'])
         else:
             item['state'] = 'unassessed'
-    # Missing/incomplete review cannot erase old tasks or turn them green.
+    # Missing actions and interrupted reviews cannot silently close old tasks.
     for item in old.values():
         if item['state'] != 'resolved':
             item['state'] = 'unassessed'

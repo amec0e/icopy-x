@@ -13,12 +13,15 @@ one persistent PR checklist. It never approves, merges, changes code or replaces
 - **Passing checks and resolved issues:** CI read from GitHub for the current
   revision, cited source assessments, and earlier actions explicitly rechecked
   by Astra. Merely disappearing from a response does not resolve an action.
+  A final, cited source correction can be shown as resolved while another area
+  still lacks coverage; the overall status remains NO-GO. An interrupted later
+  pass cannot promote an earlier proposal into a resolved action.
 - **Assessments:** scope decisions, missing context, unfinished CI and relevant
   physical evidence. These are separate from confirmed code defects.
 - **Suggestions:** optional P3 improvements, separate from required fixes.
 
 The same comment is edited on subsequent runs. Earlier findings stay visible as
-needing recheck when the head changes; partial/failed reviews cannot silently
+needing recheck when the head changes; omissions and failed runs cannot silently
 close them. The source audit explicitly revisits each prior action with current
 citations. Technical coverage and token accounting are under a disclosure.
 

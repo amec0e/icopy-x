@@ -67,7 +67,7 @@ class DashboardTests(unittest.TestCase):
         item_id = self.prior()
         self.proposal['follow_up'] = [dict(id=item_id, status='resolved', finding_index=-1,
                                          reason='Looks fixed.', evidence=[self.cite])]
-        self.saved['status'] = 'INCOMPLETE'
+        self.saved.update(status='INCOMPLETE', error='TimeoutError')
         state = self.accept()
         self.assertEqual(state['items'][0]['state'], 'unassessed')
         self.assertEqual(dashboard.readiness(state)[0], 'NO-GO')
@@ -75,6 +75,16 @@ class DashboardTests(unittest.TestCase):
         state = self.accept()
         self.assertEqual(state['items'][0]['id'], item_id)
         self.assertIn('failed source validation', state['notice'])
+
+    def test_completed_passes_can_show_a_cited_fix_while_other_coverage_remains_incomplete(self):
+        item_id = self.prior()
+        self.proposal.update(completion='incomplete', limitations=['A different caller still needs inspection.'])
+        self.proposal['follow_up'] = [dict(id=item_id, status='resolved', finding_index=-1,
+                                         reason='The cited change corrects this issue.', evidence=[self.cite])]
+        self.saved['status'] = 'INCOMPLETE'
+        state = self.accept()
+        self.assertEqual(state['items'][0]['state'], 'resolved')
+        self.assertEqual(dashboard.readiness(state)[0], 'NO-GO')
 
     def test_rewording_and_line_movement_keep_the_open_item_id(self):
         item_id = self.prior()
